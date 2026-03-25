@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import click
 from claudeclaw.auth.oauth import AuthManager
 from claudeclaw.skills.registry import SkillRegistry
@@ -6,6 +7,7 @@ from claudeclaw.subagent.dispatch import SubagentDispatcher
 from claudeclaw.core.router import Router
 from claudeclaw.core.orchestrator import Orchestrator
 from claudeclaw.channels.cli_adapter import CliAdapter
+from claudeclaw.core.event import Event
 
 
 @click.group()
@@ -17,15 +19,23 @@ def main():
 @main.command()
 def login():
     """Authenticate with your Claude account."""
-    auth = AuthManager()
-    auth.login()
+    try:
+        auth = AuthManager()
+        auth.login()
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
 
 @main.command()
 def logout():
     """Log out of your Claude account."""
-    auth = AuthManager()
-    auth.logout()
+    try:
+        auth = AuthManager()
+        auth.logout()
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
 
 @main.command()
@@ -39,6 +49,9 @@ def start(daemon):
         asyncio.run(orchestrator.run())
     except KeyboardInterrupt:
         click.echo("\nStopped.")
+    except Exception as e:
+        click.echo(f"Orchestrator error: {e}", err=True)
+        sys.exit(1)
 
 
 @main.group()
@@ -77,12 +90,15 @@ def agents_run(skill_name, message):
     skill = registry.find(skill_name)
     if skill is None:
         click.echo(f"Skill '{skill_name}' not found. Run 'claudeclaw skills list' to see available skills.")
-        raise SystemExit(1)
+        sys.exit(1)
 
-    from claudeclaw.core.event import Event
     event = Event(text=message, channel="cli", user_id="local")
     dispatcher = SubagentDispatcher()
 
     click.echo(f"Running skill '{skill_name}'...")
-    result = dispatcher.dispatch(skill, event)
+    try:
+        result = dispatcher.dispatch(skill, event)
+    except Exception as e:
+        click.echo(f"Error running '{skill_name}': {e}", err=True)
+        sys.exit(1)
     click.echo(result.text)

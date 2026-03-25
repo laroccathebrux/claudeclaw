@@ -46,3 +46,23 @@ def test_agents_run_command_exists():
     runner = CliRunner()
     result = runner.invoke(main, ["agents", "--help"])
     assert "run" in result.output
+
+
+def test_agents_run_skill_not_found():
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "run", "nonexistent-skill"])
+    assert result.exit_code != 0
+    assert "not found" in result.output
+
+
+def test_skills_list_empty(tmp_path, monkeypatch):
+    from claudeclaw.config.settings import get_settings
+    get_settings.cache_clear()
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True)
+    runner = CliRunner()
+    result = runner.invoke(main, ["skills", "list"])
+    assert "No skills" in result.output
+    assert result.exit_code == 0
+    get_settings.cache_clear()
