@@ -7,8 +7,9 @@ Uses the same OAuth mechanism as Claude Code:
 """
 import webbrowser
 import threading
+import httpx
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 import logging
 from typing import Optional
 
@@ -35,13 +36,15 @@ class AuthError(Exception):
 
 
 class _CallbackHandler(BaseHTTPRequestHandler):
-    token: Optional[str] = None
+    def __init__(self, *args, token_container: list, **kwargs):
+        self._token_container = token_container
+        super().__init__(*args, **kwargs)
 
     def do_GET(self):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
         token = params.get("token", [None])[0] or params.get("code", [None])[0]
-        _CallbackHandler.token = token
+        self._token_container[0] = token
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"<html><body><h2>ClaudeClaw authenticated. You can close this tab.</h2></body></html>")
@@ -58,34 +61,43 @@ class AuthManager:
         return self._store.get(TOKEN_KEY) is not None
 
     def get_token(self) -> str:
-        if not self.is_logged_in():
+        token = self._store.get(TOKEN_KEY)
+        if not token:
             raise AuthError("not logged in. Run: claudeclaw login")
-        return self._store.get(TOKEN_KEY)
+        return token
 
     def login(self) -> None:
         """Open browser for OAuth and wait for redirect with authorization code, then exchange for token."""
-        _CallbackHandler.token = None
-        server = HTTPServer(("localhost", REDIRECT_PORT), _CallbackHandler)
+        token_container = [None]
+
+        def handler_factory(*args, **kwargs):
+            return _CallbackHandler(*args, token_container=token_container, **kwargs)
+
+        server = HTTPServer(("localhost", REDIRECT_PORT), handler_factory)
+        server.socket.settimeout(120)
         thread = threading.Thread(target=server.handle_request)
         thread.start()
 
-        auth_url = (
-            f"{OAUTH_URL}?client_id={CLIENT_ID}"
-            f"&redirect_uri={REDIRECT_URI}&scope={SCOPE}&response_type=code"
-        )
-        print("Opening browser for Claude authentication...")
+        params = urlencode({
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT_URI,
+            "scope": SCOPE,
+            "response_type": "code",
+        })
+        auth_url = f"{OAUTH_URL}?{params}"
+        logger.info("Opening browser for Claude authentication...")
         webbrowser.open(auth_url)
         thread.join(timeout=120)
         server.server_close()
 
-        code = _CallbackHandler.token
+        code = token_container[0]
         if not code:
             raise AuthError("Authentication timed out or was cancelled.")
 
         # Exchange authorization code for access token
         token = self._exchange_code(code)
         self._store.set(TOKEN_KEY, token)
-        print("Logged in successfully.")
+        logger.info("Logged in successfully.")
 
     def _exchange_code(self, code: str) -> str:
         """
@@ -93,7 +105,6 @@ class AuthManager:
         STUB: Fill in the real Anthropic token endpoint and parameters.
         Until this is implemented, store the code directly for local testing only.
         """
-        import httpx
         # TODO: Replace with real Anthropic token endpoint discovered from Claude Code OAuth flow
         # response = httpx.post("https://claude.ai/oauth/token", data={
         #     "grant_type": "authorization_code",
@@ -108,4 +119,4 @@ class AuthManager:
 
     def logout(self) -> None:
         self._store.delete(TOKEN_KEY)
-        print("Logged out.")
+        logger.info("Logged out.")
