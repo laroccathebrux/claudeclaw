@@ -54,3 +54,22 @@ def test_router_returns_none_on_empty_skill_list():
     event = Event(text="do something", channel="cli")
     result = router.route(event)
     assert result is None
+
+
+def test_router_matches_mixed_case_skill_name():
+    skill = SkillManifest(
+        name="CRM-FollowUp",
+        description="Sends follow-up messages to hot CRM leads",
+        trigger="on-demand",
+        autonomy="notify",
+        shell_policy="none",
+        body="...",
+    )
+    router = Router([skill])
+    event = Event(text="follow up with CRM leads", channel="cli")
+
+    with patch.object(router, "_match_with_claude", return_value="crm-followup"):
+        result = router.route(event)
+
+    assert result is not None
+    assert result.name == "CRM-FollowUp"

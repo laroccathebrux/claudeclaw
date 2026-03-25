@@ -1,6 +1,6 @@
 # claudeclaw/core/event.py
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -11,7 +11,7 @@ class Event:
     channel: str                       # "cli", "telegram", "cron", "webhook", etc.
     user_id: Optional[str] = None      # channel-specific user identifier
     conversation_id: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
 
 

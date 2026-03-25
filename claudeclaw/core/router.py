@@ -27,7 +27,7 @@ class Router:
         if matched_name is None:
             return None
 
-        return next((s for s in self._skills if s.name == matched_name), None)
+        return next((s for s in self._skills if s.name.lower() == matched_name), None)
 
     def _match_with_claude(self, text: str) -> Optional[str]:
         skill_list = "\n".join(

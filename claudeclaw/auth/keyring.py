@@ -75,6 +75,11 @@ class _KeyringBackend:
             self._kr.delete_password(SERVICE_NAME, key)
         except Exception:
             pass
+        # Update the index to remove the deleted key
+        keys = self.list_keys()
+        if key in keys:
+            keys.remove(key)
+            self._kr.set_password(SERVICE_NAME, "__index__", json.dumps(keys))
 
     def list_keys(self) -> list[str]:
         # keyring has no standard list API; we maintain an index key
