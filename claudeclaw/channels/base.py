@@ -1,6 +1,6 @@
 # claudeclaw/channels/base.py
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
+from typing import AsyncGenerator
 from claudeclaw.core.event import Event, Response
 
 
@@ -11,8 +11,8 @@ class ChannelAdapter(ABC):
     """
 
     @abstractmethod
-    async def receive(self) -> AsyncIterator[Event]:
-        """Yield events as they arrive."""
+    def receive(self) -> AsyncGenerator[Event, None]:
+        """Yield events as they arrive. Implement as an async generator (async def + yield)."""
         ...
 
     @abstractmethod

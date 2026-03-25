@@ -47,7 +47,8 @@ class Orchestrator:
         """Process exactly one event. Used in tests and single-shot runs."""
         router = self._get_router()
         stream = self._channel.receive()
-        # Support both plain async generators and coroutines that return async generators
+        # iscoroutine guard: AsyncMock in tests returns a coroutine wrapping the async generator,
+        # while real implementations return the async generator directly. This check handles both cases.
         if asyncio.iscoroutine(stream):
             stream = await stream
         async for event in stream:
@@ -60,6 +61,8 @@ class Orchestrator:
         router = self._get_router()
         try:
             stream = self._channel.receive()
+            # iscoroutine guard: AsyncMock in tests returns a coroutine wrapping the async generator,
+            # while real implementations return the async generator directly. This check handles both cases.
             if asyncio.iscoroutine(stream):
                 stream = await stream
             async for event in stream:
