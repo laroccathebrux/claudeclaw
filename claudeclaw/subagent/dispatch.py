@@ -47,6 +47,16 @@ class SubagentDispatcher:
         system_prompt = self._build_system_prompt(skill)
         tools = self._build_tools(skill)
 
+        # Check and attempt token refresh if needed
+        if hasattr(self, "_auth") and self._auth is not None:
+            if self._auth.is_token_expiring():
+                refreshed = self._auth.refresh_token()
+                if not refreshed:
+                    logger.warning(
+                        "OAuth token is expiring and refresh is not yet implemented. "
+                        "Run 'claudeclaw login' if authentication fails."
+                    )
+
         # Resolve message text: prefer event.text, fall back to user_message
         text = event.text if event is not None else (user_message or "")
 

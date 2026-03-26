@@ -5,6 +5,7 @@ Uses the same OAuth mechanism as Claude Code:
 - Receives token via local redirect
 - Stores token in Keyring
 """
+import time
 import webbrowser
 import threading
 import httpx
@@ -116,6 +117,23 @@ class AuthManager:
         # return response.json()["access_token"]
         logger.warning("OAuth token exchange not implemented — storing code as token (dev only)")
         return code
+
+    def is_token_expiring(self, within_seconds: int = 300) -> bool:
+        """Return True if the stored token expires within `within_seconds`."""
+        expiry = getattr(self, "_token_expiry", None)
+        if expiry is None:
+            return True  # unknown expiry — assume expiring
+        return (expiry - time.time()) < within_seconds
+
+    def refresh_token(self) -> bool:
+        """
+        Attempt to refresh the OAuth token using the stored refresh token.
+        Returns True on success, False on failure.
+
+        Plan 6 stub: refresh endpoint not yet implemented.
+        """
+        # TODO: implement refresh endpoint call in a future plan
+        return False
 
     def logout(self) -> None:
         self._store.delete(TOKEN_KEY)
