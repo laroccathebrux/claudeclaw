@@ -1,5 +1,6 @@
 import json
 import base64
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -11,11 +12,26 @@ from claudeclaw.config.settings import Settings
 
 
 SERVICE_NAME = "claudeclaw"
-SALT = b"claudeclaw-salt-v1"  # fixed salt; credential file is already protected by master pw
+SALT_FILE_NAME = "keystore-salt"
+_OLD_FIXED_SALT = b"claudeclaw-salt-v1"  # Plan 1 legacy — used for migration only
 
 
-def _derive_key(master_password: str) -> bytes:
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=SALT, iterations=480_000)
+class CredentialMigrationError(Exception):
+    """Raised when auto-migration from Plan 1's fixed salt fails."""
+
+
+def _load_or_create_salt(config_dir: Path) -> bytes:
+    """Load the per-installation salt from disk, or generate and save a new one."""
+    salt_path = config_dir / SALT_FILE_NAME
+    if salt_path.exists():
+        return bytes.fromhex(salt_path.read_text().strip())
+    salt = os.urandom(32)
+    salt_path.write_text(salt.hex())
+    return salt
+
+
+def _derive_key(master_password: str, salt: bytes) -> bytes:
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480_000)
     return base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
 
 
@@ -24,7 +40,38 @@ class _FileBackend:
 
     def __init__(self, path: Path, master_password: str):
         self._path = path
-        self._fernet = Fernet(_derive_key(master_password))
+        config_dir = path.parent
+        self._migrate_if_needed(config_dir, master_password)
+        salt = _load_or_create_salt(config_dir)
+        self._fernet = Fernet(_derive_key(master_password, salt))
+
+    def _migrate_if_needed(self, config_dir: Path, master_password: str) -> None:
+        """Auto-migrate from Plan 1's fixed salt to per-installation salt."""
+        cred_file = config_dir / "credentials.enc"
+        salt_file = config_dir / SALT_FILE_NAME
+        if not (cred_file.exists() and not salt_file.exists()):
+            return  # nothing to migrate
+
+        try:
+            old_key = base64.urlsafe_b64encode(
+                PBKDF2HMAC(
+                    algorithm=hashes.SHA256(), length=32,
+                    salt=_OLD_FIXED_SALT, iterations=480_000
+                ).derive(master_password.encode())
+            )
+            old_fernet = Fernet(old_key)
+            data = json.loads(old_fernet.decrypt(cred_file.read_bytes()))
+        except Exception as e:
+            raise CredentialMigrationError(
+                f"Found credentials.enc without keystore-salt. "
+                f"Migration from fixed salt failed — check your master password. ({e})"
+            ) from e
+
+        new_salt = os.urandom(32)
+        salt_file.write_text(new_salt.hex())
+        new_key = _derive_key(master_password, new_salt)
+        new_fernet = Fernet(new_key)
+        cred_file.write_bytes(new_fernet.encrypt(json.dumps(data).encode()))
 
     def _load(self) -> dict:
         if not self._path.exists():
@@ -62,8 +109,6 @@ class _KeyringBackend:
         return self._kr.get_password(SERVICE_NAME, key)
 
     def set(self, key: str, value: str):
-        # Store value AND maintain an index so list_keys() works
-        # (keyring has no native list API)
         self._kr.set_password(SERVICE_NAME, key, value)
         keys = self.list_keys()
         if key not in keys:
@@ -75,14 +120,12 @@ class _KeyringBackend:
             self._kr.delete_password(SERVICE_NAME, key)
         except Exception:
             pass
-        # Update the index to remove the deleted key
         keys = self.list_keys()
         if key in keys:
             keys.remove(key)
             self._kr.set_password(SERVICE_NAME, "__index__", json.dumps(keys))
 
     def list_keys(self) -> list[str]:
-        # keyring has no standard list API; we maintain an index key
         raw = self._kr.get_password(SERVICE_NAME, "__index__")
         return json.loads(raw) if raw else []
 

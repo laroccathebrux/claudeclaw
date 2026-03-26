@@ -4,6 +4,7 @@ from typing import Optional
 import anthropic
 
 from claudeclaw.skills.loader import SkillManifest
+from claudeclaw.security.openshell import OpenShellTool
 from claudeclaw.core.event import Event
 from claudeclaw.core.conversation import ConversationState
 
@@ -44,7 +45,17 @@ class SubagentDispatcher:
         credentials: Optional[dict] = None,
     ) -> DispatchResult:
         system_prompt = self._build_system_prompt(skill)
-        tools = self._resolve_tools(skill)
+        tools = self._build_tools(skill)
+
+        # Check and attempt token refresh if needed
+        if hasattr(self, "_auth") and self._auth is not None:
+            if self._auth.is_token_expiring():
+                refreshed = self._auth.refresh_token()
+                if not refreshed:
+                    logger.warning(
+                        "OAuth token is expiring and refresh is not yet implemented. "
+                        "Run 'claudeclaw login' if authentication fails."
+                    )
 
         # Resolve message text: prefer event.text, fall back to user_message
         text = event.text if event is not None else (user_message or "")
@@ -106,11 +117,13 @@ class SubagentDispatcher:
     def _build_system_prompt(self, skill: SkillManifest) -> str:
         return skill.body
 
-    def _resolve_tools(self, skill: SkillManifest) -> list:
-        # Plan 1: tools list is empty or contains string names.
-        # MCPs and plugins are resolved in later plans.
-        # Return empty list — no tool schemas wired yet.
-        return []
+    def _build_tools(self, skill) -> list:
+        """Build the tool list for a subagent invocation based on skill frontmatter."""
+        tools = []
+        policy = getattr(skill, "shell_policy", "none")
+        if policy and policy != "none":
+            tools.append(OpenShellTool(policy=policy))
+        return tools
 
 
 async def dispatch_skill(skill: SkillManifest, event: Event):
