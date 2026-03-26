@@ -65,6 +65,9 @@ class ChannelManager:
             try:
                 async for event in adapter.receive():
                     await queue.put(event)
+                # Yield to event loop before restarting (avoids starving the loop
+                # when adapter.receive() returns quickly, e.g. in tests)
+                await asyncio.sleep(0)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
