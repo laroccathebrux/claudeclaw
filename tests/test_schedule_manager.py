@@ -149,3 +149,42 @@ async def test_deregister_webhook_skill(tmp_path, monkeypatch, mock_sdk_client, 
     await manager.deregister_skill("crm-followup")
     data = yaml.safe_load((tmp_path / "config" / "triggers.yaml").read_text()) or {}
     assert "new-crm-lead" not in data
+
+
+@pytest.mark.asyncio
+async def test_handle_remote_trigger_fired_returns_event(
+    tmp_path, monkeypatch, mock_sdk_client, webhook_skill
+):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_webhooks([webhook_skill])
+
+    tool_use_block = {
+        "type": "tool_use",
+        "name": "RemoteTriggerFired",
+        "input": {
+            "trigger_id": "new-crm-lead",
+            "payload": {"lead_name": "Acme Corp", "email": "contact@acme.com"},
+        },
+    }
+    event = await manager.handle_tool_use_event(tool_use_block)
+    assert event is not None
+    assert event.source == "webhook"
+    assert event.skill_name == "crm-followup"
+    assert event.payload["lead_name"] == "Acme Corp"
+    assert event.channel_reply_fn is None
+
+
+@pytest.mark.asyncio
+async def test_handle_remote_trigger_unknown_id_returns_none(
+    tmp_path, monkeypatch, mock_sdk_client
+):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    tool_use_block = {
+        "type": "tool_use",
+        "name": "RemoteTriggerFired",
+        "input": {"trigger_id": "nonexistent-trigger", "payload": {}},
+    }
+    event = await manager.handle_tool_use_event(tool_use_block)
+    assert event is None
