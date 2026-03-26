@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from claudeclaw.mcps.config import MCPConfig, load_mcps, save_mcps, add_mcp, remove_mcp, resolve_mcps
 from claudeclaw.skills.loader import SkillManifest
 
