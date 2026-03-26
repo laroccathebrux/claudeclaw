@@ -7,6 +7,9 @@ from claudeclaw.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Bundled native skills shipped with the package
+_BUNDLED_NATIVE_DIR = Path(__file__).parent / "native"
+
 
 class SkillRegistry:
     def __init__(
@@ -18,7 +21,8 @@ class SkillRegistry:
     ):
         # skills_dir is the old name; user_skills_dir takes precedence if both given
         self._user_dir = user_skills_dir or skills_dir or get_settings().skills_dir
-        self._native_dir = native_skills_dir
+        # If native_skills_dir is not provided, default to the bundled native directory
+        self._native_dir = native_skills_dir if native_skills_dir is not None else _BUNDLED_NATIVE_DIR
 
     def _load_from_dir(self, directory: Path, is_native: bool) -> dict[str, SkillManifest]:
         skills: dict[str, SkillManifest] = {}
@@ -47,6 +51,10 @@ class SkillRegistry:
 
     def list_all(self) -> list[SkillManifest]:
         """Alias for all_skills() — returns all skills from native + user dirs."""
+        return self.all_skills()
+
+    def reload(self) -> list[SkillManifest]:
+        """Force re-scan of skills directories. Returns all skills after rescan."""
         return self.all_skills()
 
     def find(self, name: str) -> Optional[SkillManifest]:
