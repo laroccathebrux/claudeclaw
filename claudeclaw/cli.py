@@ -16,6 +16,7 @@ from claudeclaw.plugins.manager import (
     list_plugins,
     uninstall as plugin_uninstall_manager,
 )
+from claudeclaw.security.signature import verify_plugin
 
 
 @click.group()
@@ -285,6 +286,16 @@ def plugin():
 @click.argument("name")
 def plugin_install(name):
     """Install a plugin from PyPI (claudeclaw-plugin-<name>)."""
+    package_name = f"claudeclaw-plugin-{name}" if not name.startswith("claudeclaw-plugin-") else name
+    trusted = verify_plugin(package_name, "latest")
+    if not trusted:
+        click.echo(
+            f"WARNING: Package '{package_name}' is not in the ClaudeClaw trusted publisher list.",
+            err=True,
+        )
+        if not click.confirm("Install anyway?", default=False):
+            click.echo("Installation aborted.")
+            return
     try:
         plugin_install_manager(name)
     except RuntimeError as e:
