@@ -29,6 +29,7 @@ class SkillManifest:
     tools: list[str] = field(default_factory=list)
     credentials: list[str] = field(default_factory=list)
     source_path: Optional[Path] = None
+    is_native: bool = False
 
 
 def load_skill(path: Path) -> SkillManifest:
