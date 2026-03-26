@@ -110,6 +110,8 @@ def install(name: str) -> None:
             copied_skills.append(Path(skill_rel).stem)
 
     records = _load_registry()
+    if any(r.name == manifest.name for r in records):
+        raise ValueError(f"Plugin '{manifest.name}' is already installed. Uninstall it first.")
     records.append(PluginRecord(
         name=manifest.name,
         version=manifest.version,
