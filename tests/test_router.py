@@ -52,7 +52,8 @@ def test_router_returns_none_when_no_match(skills):
 def test_router_returns_none_on_empty_skill_list():
     router = Router([])
     event = Event(text="do something", channel="cli")
-    result = router.route(event)
+    with patch.object(router, "_match_with_claude", return_value=None):
+        result = router.route(event)
     assert result is None
 
 
