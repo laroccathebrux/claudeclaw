@@ -136,3 +136,22 @@ class OpenShell:
                 exit_code=124,
                 blocked=False,
             )
+
+
+class OpenShellTool:
+    """
+    Claude SDK-compatible tool that wraps OpenShell.
+    Presents as a bash-compatible tool to the subagent.
+    Inject this in place of the default bash tool via SubagentDispatcher.
+    """
+
+    def __init__(self, policy: str):
+        self._shell = OpenShell(policy=policy)
+
+    def __call__(self, command: str) -> str:
+        result = self._shell.execute(command)
+        if result.blocked:
+            return f"[BLOCKED] {result.stderr}"
+        if result.exit_code != 0:
+            return f"[EXIT {result.exit_code}]\n{result.stderr}"
+        return result.stdout
