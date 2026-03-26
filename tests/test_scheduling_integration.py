@@ -22,10 +22,10 @@ async def test_full_startup_registers_cron_skill(tmp_path, monkeypatch, integrat
 
     registry = SkillRegistry(skills_dir=integration_skills_dir)
     all_skills = registry.list_all()
-    assert len(all_skills) == 1
-    assert all_skills[0].name == "cron-test-skill"
-    assert all_skills[0].trigger == "cron"
-    assert all_skills[0].schedule == "*/5 * * * *"
+    cron_skill = next((s for s in all_skills if s.name == "cron-test-skill"), None)
+    assert cron_skill is not None
+    assert cron_skill.trigger == "cron"
+    assert cron_skill.schedule == "*/5 * * * *"
 
     mock_client = MagicMock()
     mock_client.beta.cron_create = AsyncMock(return_value={"cron_id": "cron_integration_001"})

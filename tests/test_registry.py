@@ -6,8 +6,8 @@ def test_list_returns_loaded_skills(tmp_skills_dir, sample_skill_md, monkeypatch
     monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_skills_dir.parent))
     registry = SkillRegistry(skills_dir=tmp_skills_dir)
     skills = registry.list_skills()
-    assert len(skills) == 1
-    assert skills[0].name == "test-skill"
+    names = [s.name for s in skills]
+    assert "test-skill" in names
 
 
 def test_find_by_name(tmp_skills_dir, sample_skill_md, monkeypatch):

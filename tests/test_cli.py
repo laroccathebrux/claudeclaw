@@ -63,6 +63,7 @@ def test_skills_list_empty(tmp_path, monkeypatch):
     skills_dir.mkdir(parents=True)
     runner = CliRunner()
     result = runner.invoke(main, ["skills", "list"])
-    assert "No skills" in result.output
+    # Native skills (agent-creator, pop) are always bundled, so the list is never empty
     assert result.exit_code == 0
+    assert "agent-creator" in result.output or "pop" in result.output
     get_settings.cache_clear()
