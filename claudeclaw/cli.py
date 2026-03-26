@@ -4,7 +4,6 @@ import click
 from claudeclaw.auth.oauth import AuthManager
 from claudeclaw.skills.registry import SkillRegistry
 from claudeclaw.subagent.dispatch import SubagentDispatcher
-from claudeclaw.core.router import Router
 from claudeclaw.core.orchestrator import Orchestrator
 from claudeclaw.channels.cli_adapter import CliAdapter
 from claudeclaw.core.event import Event
@@ -43,10 +42,24 @@ def logout():
 def start(daemon):
     """Start the ClaudeClaw orchestrator."""
     click.echo("Starting ClaudeClaw...")
-    channel = CliAdapter()
-    orchestrator = Orchestrator(channel=channel)
+
+    async def _run():
+        channel = CliAdapter()
+        registry = SkillRegistry()
+        from claudeclaw.auth.keyring import CredentialStore
+        credential_store = CredentialStore()
+        orchestrator = Orchestrator(skill_registry=registry, credential_store=credential_store)
+        queue = asyncio.Queue()
+
+        async def _feed_queue():
+            async for event in channel.receive():
+                event.channel_adapter = channel
+                await queue.put(event)
+
+        await asyncio.gather(_feed_queue(), orchestrator.run(queue))
+
     try:
-        asyncio.run(orchestrator.run())
+        asyncio.run(_run())
     except KeyboardInterrupt:
         click.echo("\nStopped.")
     except Exception as e:

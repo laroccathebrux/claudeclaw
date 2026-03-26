@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from claudeclaw.core.orchestrator import Orchestrator
@@ -21,11 +22,8 @@ def skill():
 async def test_orchestrator_routes_and_dispatches(skill):
     from claudeclaw.subagent.dispatch import DispatchResult
 
-    mock_channel = MagicMock()
-    mock_channel.receive = AsyncMock(return_value=aiter([
-        Event(text="echo hello", channel="cli")
-    ]))
-    mock_channel.send = AsyncMock()
+    mock_adapter = AsyncMock()
+    mock_adapter.send = AsyncMock()
 
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = [skill]
@@ -38,28 +36,27 @@ async def test_orchestrator_routes_and_dispatches(skill):
         text="hello", skill_name="echo-skill", stop_reason="end_turn"
     )
 
-    orchestrator = Orchestrator(
-        channel=mock_channel,
-        registry=mock_registry,
-        router=mock_router,
-        dispatcher=mock_dispatcher,
-    )
+    orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
 
-    await orchestrator.run_once()
+    event = Event(text="echo hello", channel="cli", channel_adapter=mock_adapter)
+
+    with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
+         patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
+        queue = asyncio.Queue()
+        await queue.put(event)
+        await queue.put(None)  # sentinel
+        await orchestrator.run(queue, stop_sentinel=True)
 
     mock_dispatcher.dispatch.assert_called_once()
-    mock_channel.send.assert_called_once()
-    sent_response = mock_channel.send.call_args[0][0]
+    mock_adapter.send.assert_awaited_once()
+    sent_response = mock_adapter.send.call_args[0][0]
     assert "hello" in sent_response.text
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_sends_fallback_on_no_skill_match():
-    mock_channel = MagicMock()
-    mock_channel.receive = AsyncMock(return_value=aiter([
-        Event(text="something unknown", channel="cli")
-    ]))
-    mock_channel.send = AsyncMock()
+    mock_adapter = AsyncMock()
+    mock_adapter.send = AsyncMock()
 
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
@@ -69,22 +66,18 @@ async def test_orchestrator_sends_fallback_on_no_skill_match():
 
     mock_dispatcher = MagicMock()
 
-    orchestrator = Orchestrator(
-        channel=mock_channel,
-        registry=mock_registry,
-        router=mock_router,
-        dispatcher=mock_dispatcher,
-    )
+    orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
 
-    await orchestrator.run_once()
+    event = Event(text="something unknown", channel="cli", channel_adapter=mock_adapter)
+
+    with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
+         patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
+        queue = asyncio.Queue()
+        await queue.put(event)
+        await queue.put(None)  # sentinel
+        await orchestrator.run(queue, stop_sentinel=True)
 
     mock_dispatcher.dispatch.assert_not_called()
-    mock_channel.send.assert_called_once()
-    sent = mock_channel.send.call_args[0][0]
+    mock_adapter.send.assert_awaited_once()
+    sent = mock_adapter.send.call_args[0][0]
     assert "no skill" in sent.text.lower() or "don't know" in sent.text.lower()
-
-
-# Helper: async generator from list
-async def aiter(items):
-    for item in items:
-        yield item
