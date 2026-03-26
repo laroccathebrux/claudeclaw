@@ -10,6 +10,12 @@ from claudeclaw.config.settings import get_settings as _get_settings
 from claudeclaw.core.orchestrator import Orchestrator
 from claudeclaw.channels.cli_adapter import CliAdapter
 from claudeclaw.core.event import Event
+from claudeclaw.mcps.config import MCPConfig, load_mcps, add_mcp, remove_mcp
+from claudeclaw.plugins.manager import (
+    install as plugin_install_manager,
+    list_plugins,
+    uninstall as plugin_uninstall_manager,
+)
 
 
 @click.group()
@@ -226,3 +232,94 @@ def schedule_run(skill_name: str):
 
     result = asyncio.run(_run())
     click.echo(f"Done. Result: {result}")
+
+
+@main.group()
+def mcp():
+    """Manage MCP server configurations."""
+    pass
+
+
+@mcp.command("add")
+@click.argument("name")
+@click.option("--command", required=True, help="Executable to launch the MCP server")
+@click.option("--args", multiple=True, help="Arguments for the MCP server command")
+@click.option("--env", "env_vars", multiple=True, help="Environment variables as KEY=VALUE pairs")
+@click.option("--scope", type=click.Choice(["global", "agent"]), default="agent",
+              show_default=True, help="global = all subagents; agent = per-skill opt-in")
+def mcp_add(name, command, args, env_vars, scope):
+    """Register a new MCP server configuration."""
+    env_dict = {}
+    for item in env_vars:
+        if "=" not in item:
+            raise click.BadParameter(f"env must be KEY=VALUE, got: {item}")
+        k, v = item.split("=", 1)
+        env_dict[k] = v
+    try:
+        add_mcp(MCPConfig(name=name, command=command, args=list(args), env=env_dict, scope=scope))
+        click.echo(f"MCP '{name}' registered (scope: {scope}).")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
+@mcp.command("list")
+def mcp_list():
+    """List all configured MCP servers."""
+    mcps = load_mcps()
+    if not mcps:
+        click.echo("No MCPs configured. Use 'claudeclaw mcp add' to register one.")
+        return
+    click.echo(f"{'NAME':<20} {'SCOPE':<10} {'COMMAND'}")
+    click.echo("-" * 50)
+    for m in mcps:
+        click.echo(f"{m.name:<20} {m.scope:<10} {m.command} {' '.join(m.args)}")
+
+
+@main.group()
+def plugin():
+    """Manage ClaudeClaw plugins."""
+    pass
+
+
+@plugin.command("install")
+@click.argument("name")
+def plugin_install(name):
+    """Install a plugin from PyPI (claudeclaw-plugin-<name>)."""
+    try:
+        plugin_install_manager(name)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+
+@plugin.command("list")
+def plugin_list():
+    """List installed plugins."""
+    records = list_plugins()
+    if not records:
+        click.echo("No plugins installed. Use 'claudeclaw plugin install <name>'.")
+        return
+    click.echo(f"{'NAME':<20} {'VERSION':<10} {'MCPS':<6} {'SKILLS':<8} {'INSTALLED'}")
+    click.echo("-" * 65)
+    for r in records:
+        click.echo(f"{r.name:<20} {r.version:<10} {len(r.mcps):<6} {len(r.skills):<8} {r.installed_at[:10]}")
+
+
+@plugin.command("uninstall")
+@click.argument("name")
+def plugin_uninstall(name):
+    """Uninstall a plugin and remove its MCPs and skills."""
+    try:
+        plugin_uninstall_manager(name)
+    except KeyError as e:
+        raise click.ClickException(str(e))
+
+
+@mcp.command("remove")
+@click.argument("name")
+def mcp_remove(name):
+    """Remove a registered MCP server."""
+    try:
+        remove_mcp(name)
+        click.echo(f"MCP '{name}' removed.")
+    except KeyError as e:
+        raise click.ClickException(str(e))

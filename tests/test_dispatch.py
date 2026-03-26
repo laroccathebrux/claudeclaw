@@ -67,14 +67,10 @@ def test_dispatch_enforces_tool_permission(skill, event):
     assert call_kwargs.get("tools", []) == []
 
 
-def test_dispatch_injects_credentials_as_context(skill, event, tmp_path, monkeypatch):
-    """Credentials should be injected into system prompt context."""
+def test_dispatch_injects_credentials_as_env_vars(skill, event, tmp_path, monkeypatch):
+    """Credentials should be injected as env vars, not as plaintext in system prompt."""
     monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
     skill.credentials = ["erp-user"]
-
-    from claudeclaw.auth.keyring import CredentialStore
-    store = CredentialStore(backend="file", master_password="test")
-    store.set("erp-user", "alice")
 
     dispatcher = SubagentDispatcher()
     mock_response = MagicMock()
@@ -82,8 +78,10 @@ def test_dispatch_injects_credentials_as_context(skill, event, tmp_path, monkeyp
     mock_response.stop_reason = "end_turn"
 
     with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
-        with patch("claudeclaw.subagent.dispatch.CredentialStore", return_value=store):
-            dispatcher.dispatch(skill, event)
+        dispatcher.dispatch(skill, event, credentials={"erp-user": "alice"})
 
-    system_prompt = mock_create.call_args.kwargs["system"]
-    assert "alice" in system_prompt
+    call_kwargs = mock_create.call_args.kwargs
+    env = call_kwargs.get("env") or {}
+    assert env.get("ERP_USER") == "alice"
+    system_prompt = call_kwargs.get("system", "")
+    assert "alice" not in system_prompt
