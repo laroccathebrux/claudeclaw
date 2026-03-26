@@ -36,12 +36,11 @@ async def test_orchestrator_routes_and_dispatches(skill):
         text="hello", skill_name="echo-skill", stop_reason="end_turn"
     )
 
-    orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
-
     event = Event(text="echo hello", channel="cli", channel_adapter=mock_adapter)
 
     with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
          patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
+        orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
         queue = asyncio.Queue()
         await queue.put(event)
         await queue.put(None)  # sentinel
@@ -66,12 +65,11 @@ async def test_orchestrator_sends_fallback_on_no_skill_match():
 
     mock_dispatcher = MagicMock()
 
-    orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
-
     event = Event(text="something unknown", channel="cli", channel_adapter=mock_adapter)
 
     with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
          patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
+        orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
         queue = asyncio.Queue()
         await queue.put(event)
         await queue.put(None)  # sentinel

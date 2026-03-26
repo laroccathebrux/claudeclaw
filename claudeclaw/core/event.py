@@ -28,5 +28,4 @@ class Response:
     channel: str = ""
     chat_id: Optional[Any] = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    # Kept for backward compatibility with Plan 1 code that references response.event
-    event: Optional["Event"] = field(default=None, repr=False)
+    event: Optional["Event"] = None  # TODO(Plan 3): remove — kept for Plan 1 backward compatibility

@@ -1,3 +1,4 @@
+# claudeclaw/core/orchestrator.py
 import asyncio
 import logging
 from typing import Optional
@@ -27,6 +28,19 @@ class Orchestrator:
     def __init__(self, skill_registry: SkillRegistry, credential_store: CredentialStore):
         self.registry = skill_registry
         self.credential_store = credential_store
+        self._dispatcher = SubagentDispatcher()
+        # Router is lazy-initialized after registry is loaded
+        self._router: Optional[Router] = None
+
+    def _get_router(self) -> Router:
+        if self._router is None:
+            skills = (
+                self.registry.list_skills()
+                if hasattr(self.registry, "list_skills")
+                else self.registry.all_skills()
+            )
+            self._router = Router(skills)
+        return self._router
 
     async def run(self, event_queue: asyncio.Queue, stop_sentinel: bool = False):
         """Consume events from the queue until stopped."""
@@ -42,7 +56,7 @@ class Orchestrator:
             event_queue.task_done()
 
     async def _process(self, event: Event) -> Response:
-        router = Router(self.registry.list_skills())
+        router = self._get_router()
         skill = router.route(event)
 
         if skill is None:
@@ -51,8 +65,7 @@ class Orchestrator:
 
         logger.info("Dispatching skill '%s' for event: %r", skill.name, event.text)
         try:
-            dispatcher = SubagentDispatcher()
-            result = dispatcher.dispatch(skill, event)
+            result = self._dispatcher.dispatch(skill, event)
             return Response(text=result.text, channel=event.channel)
         except Exception as e:
             logger.error("Dispatch failed: %s", e)
