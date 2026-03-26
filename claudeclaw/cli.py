@@ -1,7 +1,9 @@
 import asyncio
 import sys
+import yaml as _yaml
 import click
 from claudeclaw.auth.oauth import AuthManager
+from claudeclaw.auth.keyring import CredentialStore
 from claudeclaw.skills.registry import SkillRegistry
 from claudeclaw.subagent.dispatch import SubagentDispatcher
 from claudeclaw.core.orchestrator import Orchestrator
@@ -115,3 +117,39 @@ def agents_run(skill_name, message):
         click.echo(f"Error running '{skill_name}': {e}", err=True)
         sys.exit(1)
     click.echo(result.text)
+
+
+@main.group()
+def channel():
+    """Manage channel adapters (Telegram, Slack, etc.)."""
+
+
+@channel.command("add")
+@click.argument("channel_type")
+@click.option("--token", required=True, help="Bot or API token for the channel.")
+def channel_add(channel_type: str, token: str):
+    """Add and configure a channel adapter."""
+    from claudeclaw.config.settings import get_settings
+
+    settings = get_settings()
+    store = CredentialStore()
+
+    # Store token in credential store
+    token_key = f"{channel_type}-bot-token"
+    store.set(token_key, token)
+
+    # Upsert entry in channels.yaml
+    channels_file = settings.config_dir / "channels.yaml"
+    if channels_file.exists():
+        data = _yaml.safe_load(channels_file.read_text()) or {}
+    else:
+        data = {}
+
+    channels = data.get("channels", [])
+    # Remove existing entry for this channel type (idempotent)
+    channels = [c for c in channels if c.get("type") != channel_type]
+    channels.append({"type": channel_type, "enabled": True})
+    data["channels"] = channels
+    channels_file.write_text(_yaml.dump(data, default_flow_style=False))
+
+    click.echo(f"Channel '{channel_type}' configured. Token stored securely.")
