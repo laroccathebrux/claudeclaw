@@ -188,3 +188,48 @@ async def test_handle_remote_trigger_unknown_id_returns_none(
     }
     event = await manager.handle_tool_use_event(tool_use_block)
     assert event is None
+
+
+@pytest.mark.asyncio
+async def test_schedules_yaml_survives_restart(tmp_path, monkeypatch, mock_sdk_client, cron_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+
+    manager1 = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager1.register_crons([cron_skill])
+
+    manager2 = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager2.register_crons([cron_skill])
+
+    assert mock_sdk_client.beta.cron_create.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_triggers_yaml_survives_restart(tmp_path, monkeypatch, mock_sdk_client, webhook_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+
+    manager1 = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager1.register_webhooks([webhook_skill])
+
+    manager2 = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager2.register_webhooks([webhook_skill])
+
+    assert mock_sdk_client.beta.remote_trigger.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_deregister_cron_skill(tmp_path, monkeypatch, mock_sdk_client, cron_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_crons([cron_skill])
+    await manager.deregister_skill("erp-invoices")
+    mock_sdk_client.beta.cron_delete.assert_awaited_once()
+    data = yaml.safe_load((tmp_path / "config" / "schedules.yaml").read_text()) or {}
+    assert "erp-invoices" not in data
+
+
+@pytest.mark.asyncio
+async def test_deregister_nonexistent_skill_is_noop(tmp_path, monkeypatch, mock_sdk_client):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.deregister_skill("skill-that-was-never-registered")
+    mock_sdk_client.beta.cron_delete.assert_not_awaited()
