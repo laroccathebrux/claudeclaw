@@ -8,6 +8,7 @@ from claudeclaw.core.router import route as route_event
 from claudeclaw.skills.registry import SkillRegistry
 from claudeclaw.subagent.dispatch import SubagentDispatcher
 from claudeclaw.auth.keyring import CredentialStore
+from claudeclaw.core.conversation import ConversationStore
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,16 @@ class Orchestrator:
     and sends the response back via the event's channel_adapter.
     """
 
-    def __init__(self, skill_registry: SkillRegistry, credential_store: CredentialStore):
+    def __init__(
+        self,
+        skill_registry: SkillRegistry,
+        credential_store: CredentialStore,
+        conv_store: Optional[ConversationStore] = None,
+    ):
         self.registry = skill_registry
         self.credential_store = credential_store
         self._dispatcher = SubagentDispatcher()
+        self._conv_store = conv_store or ConversationStore()
 
     async def run(self, event_queue: asyncio.Queue, stop_sentinel: bool = False):
         """Consume events from the queue until stopped."""
@@ -44,7 +51,21 @@ class Orchestrator:
             event_queue.task_done()
 
     async def _process(self, event: Event) -> Response:
-        skill = route_event(event, self.registry)
+        conversation = None
+        skill = None
+
+        user_id = event.user_id or ""
+        if self._conv_store.has_active(event.channel, user_id):
+            conversation = self._conv_store.get(event.channel, user_id)
+            if conversation is not None:
+                skill = self.registry.find(conversation.skill_name)
+                logger.info(
+                    "Resuming conversation for skill '%s' (step %d)",
+                    conversation.skill_name, conversation.step,
+                )
+
+        if skill is None:
+            skill = route_event(event, self.registry)
 
         if skill is None:
             logger.info("No skill matched for: %r", event.text)
@@ -52,7 +73,7 @@ class Orchestrator:
 
         logger.info("Dispatching skill '%s' for event: %r", skill.name, event.text)
         try:
-            result = self._dispatcher.dispatch(skill, event)
+            result = self._dispatcher.dispatch(skill, event, conversation=conversation)
             return Response(text=result.text, channel=event.channel)
         except Exception as e:
             logger.error("Dispatch failed: %s", e)

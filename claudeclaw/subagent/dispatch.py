@@ -6,6 +6,7 @@ import anthropic
 from claudeclaw.skills.loader import SkillManifest
 from claudeclaw.core.event import Event
 from claudeclaw.auth.keyring import CredentialStore
+from claudeclaw.core.conversation import ConversationState
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,20 @@ class SubagentDispatcher:
     def __init__(self, client: Optional[anthropic.Anthropic] = None):
         self._client = client or anthropic.Anthropic()
 
-    def dispatch(self, skill: SkillManifest, event: Event) -> DispatchResult:
+    def dispatch(
+        self,
+        skill: SkillManifest,
+        event: Event,
+        conversation: Optional[ConversationState] = None,
+    ) -> DispatchResult:
         system_prompt = self._build_system_prompt(skill)
         tools = self._resolve_tools(skill)
-        messages = [{"role": "user", "content": event.text}]
+
+        # Build messages: prepend history if resuming a conversation
+        messages = []
+        if conversation and conversation.history:
+            messages.extend(conversation.history)
+        messages.append({"role": "user", "content": event.text})
 
         kwargs = dict(
             model=MODEL,
