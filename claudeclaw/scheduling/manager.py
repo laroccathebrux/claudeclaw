@@ -61,6 +61,27 @@ class ScheduleManager:
 
         self._save_schedules(data)
 
+    async def register_webhooks(self, skills: list) -> None:
+        data = self._load_triggers()
+
+        for skill in skills:
+            if getattr(skill, "trigger", None) != "webhook":
+                continue
+            trigger_id = skill.trigger_id
+            if not trigger_id:
+                continue
+            if trigger_id in data:
+                continue
+
+            result = await self._client.beta.remote_trigger(trigger_id=trigger_id)
+            data[trigger_id] = {
+                "skill_name": skill.name,
+                "webhook_url": result["webhook_url"],
+                "registered_at": self._now_iso(),
+            }
+
+        self._save_triggers(data)
+
     async def deregister_skill(self, skill_name: str) -> None:
         schedules = self._load_schedules()
         if skill_name in schedules:

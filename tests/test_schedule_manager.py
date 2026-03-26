@@ -107,3 +107,45 @@ async def test_handle_cron_fired_unknown_cron_id_returns_none(tmp_path, monkeypa
     }
     event = await manager.handle_tool_use_event(tool_use_block)
     assert event is None
+
+
+@pytest.mark.asyncio
+async def test_register_webhook_calls_sdk(tmp_path, monkeypatch, mock_sdk_client, webhook_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_webhooks([webhook_skill])
+    mock_sdk_client.beta.remote_trigger.assert_awaited_once()
+    call_kwargs = mock_sdk_client.beta.remote_trigger.call_args
+    assert call_kwargs.kwargs["trigger_id"] == "new-crm-lead"
+
+
+@pytest.mark.asyncio
+async def test_register_webhook_persists_to_yaml(tmp_path, monkeypatch, mock_sdk_client, webhook_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_webhooks([webhook_skill])
+    triggers_file = tmp_path / "config" / "triggers.yaml"
+    assert triggers_file.exists()
+    data = yaml.safe_load(triggers_file.read_text())
+    assert "new-crm-lead" in data
+    assert data["new-crm-lead"]["skill_name"] == "crm-followup"
+    assert "webhook_url" in data["new-crm-lead"]
+
+
+@pytest.mark.asyncio
+async def test_register_webhook_is_idempotent(tmp_path, monkeypatch, mock_sdk_client, webhook_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_webhooks([webhook_skill])
+    await manager.register_webhooks([webhook_skill])
+    assert mock_sdk_client.beta.remote_trigger.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_deregister_webhook_skill(tmp_path, monkeypatch, mock_sdk_client, webhook_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_webhooks([webhook_skill])
+    await manager.deregister_skill("crm-followup")
+    data = yaml.safe_load((tmp_path / "config" / "triggers.yaml").read_text()) or {}
+    assert "new-crm-lead" not in data
