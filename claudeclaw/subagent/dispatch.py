@@ -33,17 +33,36 @@ class SubagentDispatcher:
     def dispatch(
         self,
         skill: SkillManifest,
-        event: Event,
+        event: Optional[Event] = None,
         conversation: Optional[ConversationState] = None,
+        *,
+        user_message: Optional[str] = None,
+        credentials: Optional[dict] = None,
     ) -> DispatchResult:
         system_prompt = self._build_system_prompt(skill)
         tools = self._resolve_tools(skill)
+
+        # Resolve message text: prefer event.text, fall back to user_message
+        text = event.text if event is not None else (user_message or "")
+
+        # Build MCP servers list
+        from claudeclaw.mcps.config import resolve_mcps
+        mcp_configs = resolve_mcps(skill)
+        mcp_servers = [
+            {
+                "type": "stdio",
+                "command": m.command,
+                "args": m.args,
+                "env": m.env,
+            }
+            for m in mcp_configs
+        ]
 
         # Build messages: prepend history if resuming a conversation
         messages = []
         if conversation and conversation.history:
             messages.extend(conversation.history)
-        messages.append({"role": "user", "content": event.text})
+        messages.append({"role": "user", "content": text})
 
         kwargs = dict(
             model=MODEL,
@@ -53,6 +72,8 @@ class SubagentDispatcher:
         )
         if tools:
             kwargs["tools"] = tools
+        if mcp_servers:
+            kwargs["mcp_servers"] = mcp_servers
 
         try:
             response = self._client.messages.create(**kwargs)
