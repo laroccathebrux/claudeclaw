@@ -45,6 +45,10 @@ class SkillRegistry:
         """Backward-compatible alias for all_skills()."""
         return self.all_skills()
 
+    def list_all(self) -> list:
+        """Alias for all_skills() — returns all skills from native + user dirs."""
+        return self.all_skills()
+
     def find(self, name: str) -> Optional[SkillManifest]:
         for skill in self.all_skills():
             if skill.name == name:
