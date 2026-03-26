@@ -52,7 +52,6 @@ def test_generic_text_does_not_match_native_intents(mocker):
     """Text with no known intent keywords falls through to general routing."""
     registry = _make_registry(["pop", "agent-creator"])
     event = Event(text="hello, what time is it?", channel="cli")
-    # Mock general routing to return a dummy skill
-    mocker.patch("claudeclaw.core.router._general_route", return_value=MagicMock(name="time-skill"))
-    skill = route(event, registry)
-    assert skill is not None  # general route was called
+    mock_general = mocker.patch("claudeclaw.core.router._general_route", return_value=MagicMock(name="time-skill"))
+    route(event, registry)
+    mock_general.assert_called_once_with(event, registry)

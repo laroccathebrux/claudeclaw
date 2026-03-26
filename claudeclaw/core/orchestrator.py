@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from claudeclaw.core.event import Event, Response
-from claudeclaw.core.router import Router, route as route_event
+from claudeclaw.core.router import route as route_event
 from claudeclaw.skills.registry import SkillRegistry
 from claudeclaw.subagent.dispatch import SubagentDispatcher
 from claudeclaw.auth.keyring import CredentialStore
