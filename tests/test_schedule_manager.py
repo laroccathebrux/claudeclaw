@@ -60,3 +60,50 @@ async def test_on_demand_skills_are_skipped(tmp_path, monkeypatch, mock_sdk_clie
     manager = ScheduleManager(sdk_client=mock_sdk_client)
     await manager.register_crons([skill])
     mock_sdk_client.beta.cron_create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_cron_fired_returns_event(tmp_path, monkeypatch, mock_sdk_client, cron_skill):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    await manager.register_crons([cron_skill])
+
+    cron_id = (yaml.safe_load((tmp_path / "config" / "schedules.yaml").read_text())
+               ["erp-invoices"]["cron_id"])
+    tool_use_block = {
+        "type": "tool_use",
+        "name": "CronFired",
+        "input": {"cron_id": cron_id, "fired_at": "2026-03-28T00:00:00Z"},
+    }
+    event = await manager.handle_tool_use_event(tool_use_block)
+    assert event is not None
+    assert event.source == "cron"
+    assert event.skill_name == "erp-invoices"
+    assert event.payload["fired_at"] == "2026-03-28T00:00:00Z"
+    assert event.channel_reply_fn is None
+
+
+@pytest.mark.asyncio
+async def test_handle_unknown_tool_use_returns_none(tmp_path, monkeypatch, mock_sdk_client):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    tool_use_block = {
+        "type": "tool_use",
+        "name": "SomeOtherTool",
+        "input": {"foo": "bar"},
+    }
+    event = await manager.handle_tool_use_event(tool_use_block)
+    assert event is None
+
+
+@pytest.mark.asyncio
+async def test_handle_cron_fired_unknown_cron_id_returns_none(tmp_path, monkeypatch, mock_sdk_client):
+    monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
+    manager = ScheduleManager(sdk_client=mock_sdk_client)
+    tool_use_block = {
+        "type": "tool_use",
+        "name": "CronFired",
+        "input": {"cron_id": "cron_does_not_exist", "fired_at": "2026-03-28T00:00:00Z"},
+    }
+    event = await manager.handle_tool_use_event(tool_use_block)
+    assert event is None

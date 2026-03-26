@@ -77,3 +77,43 @@ class ScheduleManager:
             del triggers[tid]
         if triggers_to_remove:
             self._save_triggers(triggers)
+
+    async def handle_tool_use_event(self, block: dict) -> "Event | None":
+        from claudeclaw.core.event import Event
+        name = block.get("name")
+        inp = block.get("input", {})
+
+        if name == "CronFired":
+            cron_id = inp.get("cron_id")
+            schedules = self._load_schedules()
+            skill_name = next(
+                (sn for sn, meta in schedules.items() if meta["cron_id"] == cron_id),
+                None,
+            )
+            if skill_name is None:
+                return None
+            return Event(
+                text="",
+                channel="cron",
+                source="cron",
+                skill_name=skill_name,
+                payload={"fired_at": inp.get("fired_at")},
+                channel_reply_fn=None,
+            )
+
+        if name == "RemoteTriggerFired":
+            trigger_id = inp.get("trigger_id")
+            triggers = self._load_triggers()
+            entry = triggers.get(trigger_id)
+            if entry is None:
+                return None
+            return Event(
+                text="",
+                channel="webhook",
+                source="webhook",
+                skill_name=entry["skill_name"],
+                payload=inp.get("payload", {}),
+                channel_reply_fn=None,
+            )
+
+        return None

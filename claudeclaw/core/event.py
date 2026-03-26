@@ -19,6 +19,10 @@ class Event:
     conversation_id: Optional[str] = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict = field(default_factory=dict)
+    source: str = "cli"                # "cli" | "telegram" | "cron" | "webhook" | "manual"
+    skill_name: Optional[str] = None   # pre-resolved for cron/webhook/manual events
+    payload: dict = field(default_factory=dict)
+    channel_reply_fn: Optional[Any] = None  # None for headless scheduled events
 
 
 @dataclass
