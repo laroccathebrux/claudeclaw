@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 from claudeclaw.skills.registry import SkillRegistry
-from claudeclaw.skills.loader import SkillManifest
+from claudeclaw.skills.loader import SkillManifest, load_skill
 
 
 NATIVE_SKILLS_DIR = Path(__file__).parent.parent / "claudeclaw" / "skills" / "native"
@@ -63,3 +63,11 @@ def test_backward_compat_skills_dir_kwarg(tmp_skills_dir, sample_skill_md):
     registry = SkillRegistry(skills_dir=tmp_skills_dir)
     names = [s.name for s in registry.list_skills()]
     assert "test-skill" in names
+
+
+def test_pop_md_loads_without_error():
+    pop_path = NATIVE_SKILLS_DIR / "pop.md"
+    assert pop_path.exists(), "pop.md must exist before this test"
+    skill = load_skill(pop_path)
+    assert skill.name == "pop"
+    assert skill.trigger == "on-demand"
