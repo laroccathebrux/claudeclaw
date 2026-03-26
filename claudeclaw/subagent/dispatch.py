@@ -81,6 +81,12 @@ class SubagentDispatcher:
 
 
 async def dispatch_skill(skill: SkillManifest, event: Event):
-    """Async wrapper around SubagentDispatcher for use in async CLI contexts."""
+    """Async wrapper around SubagentDispatcher for use in async CLI contexts.
+
+    NOTE: SubagentDispatcher.dispatch is currently synchronous (uses anthropic.Anthropic,
+    not AsyncAnthropic). This wrapper is intentionally kept async so callers can await it
+    uniformly. When the dispatcher is migrated to async streaming (planned for a later plan),
+    this wrapper will not need to change.
+    """
     dispatcher = SubagentDispatcher()
     return dispatcher.dispatch(skill, event)

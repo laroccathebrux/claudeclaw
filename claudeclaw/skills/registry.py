@@ -45,7 +45,7 @@ class SkillRegistry:
         """Backward-compatible alias for all_skills()."""
         return self.all_skills()
 
-    def list_all(self) -> list:
+    def list_all(self) -> list[SkillManifest]:
         """Alias for all_skills() — returns all skills from native + user dirs."""
         return self.all_skills()
 

@@ -188,7 +188,7 @@ def schedule_list():
     if schedules:
         click.echo("\nCRON SCHEDULES")
         for skill_name, meta in schedules.items():
-            click.echo(f"  {skill_name:<25} {meta['schedule']:<20} {meta['cron_id']}")
+            click.echo(f"  {skill_name:<25} {meta.get('schedule', '?'):<20} {meta.get('cron_id', '?')}")
 
     if triggers:
         click.echo("\nWEBHOOK TRIGGERS")
