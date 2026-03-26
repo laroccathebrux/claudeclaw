@@ -34,12 +34,7 @@ class Orchestrator:
 
     def _get_router(self) -> Router:
         if self._router is None:
-            skills = (
-                self.registry.list_skills()
-                if hasattr(self.registry, "list_skills")
-                else self.registry.all_skills()
-            )
-            self._router = Router(skills)
+            self._router = Router(self.registry.all_skills())
         return self._router
 
     async def run(self, event_queue: asyncio.Queue, stop_sentinel: bool = False):

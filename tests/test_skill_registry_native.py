@@ -56,3 +56,10 @@ def test_registry_find_returns_none_for_unknown(tmp_path):
         native_skills_dir=NATIVE_SKILLS_DIR,
     )
     assert registry.find("does-not-exist") is None
+
+
+def test_backward_compat_skills_dir_kwarg(tmp_skills_dir, sample_skill_md):
+    """SkillRegistry(skills_dir=X) should still load skills from X."""
+    registry = SkillRegistry(skills_dir=tmp_skills_dir)
+    names = [s.name for s in registry.list_skills()]
+    assert "test-skill" in names
