@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from claudeclaw.core.event import Event, Response
-from claudeclaw.core.router import Router
+from claudeclaw.core.router import Router, route as route_event
 from claudeclaw.skills.registry import SkillRegistry
 from claudeclaw.subagent.dispatch import SubagentDispatcher
 from claudeclaw.auth.keyring import CredentialStore
@@ -29,13 +29,6 @@ class Orchestrator:
         self.registry = skill_registry
         self.credential_store = credential_store
         self._dispatcher = SubagentDispatcher()
-        # Router is lazy-initialized after registry is loaded
-        self._router: Optional[Router] = None
-
-    def _get_router(self) -> Router:
-        if self._router is None:
-            self._router = Router(self.registry.all_skills())
-        return self._router
 
     async def run(self, event_queue: asyncio.Queue, stop_sentinel: bool = False):
         """Consume events from the queue until stopped."""
@@ -51,8 +44,7 @@ class Orchestrator:
             event_queue.task_done()
 
     async def _process(self, event: Event) -> Response:
-        router = self._get_router()
-        skill = router.route(event)
+        skill = route_event(event, self.registry)
 
         if skill is None:
             logger.info("No skill matched for: %r", event.text)

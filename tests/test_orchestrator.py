@@ -38,7 +38,7 @@ async def test_orchestrator_routes_and_dispatches(skill):
 
     event = Event(text="echo hello", channel="cli", channel_adapter=mock_adapter)
 
-    with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
+    with patch("claudeclaw.core.orchestrator.route_event", return_value=skill), \
          patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
         orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
         queue = asyncio.Queue()
@@ -67,7 +67,7 @@ async def test_orchestrator_sends_fallback_on_no_skill_match():
 
     event = Event(text="something unknown", channel="cli", channel_adapter=mock_adapter)
 
-    with patch("claudeclaw.core.orchestrator.Router", return_value=mock_router), \
+    with patch("claudeclaw.core.orchestrator.route_event", return_value=None), \
          patch("claudeclaw.core.orchestrator.SubagentDispatcher", return_value=mock_dispatcher):
         orchestrator = Orchestrator(skill_registry=mock_registry, credential_store=MagicMock())
         queue = asyncio.Queue()

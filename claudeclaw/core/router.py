@@ -4,6 +4,7 @@ import anthropic
 
 from claudeclaw.core.event import Event
 from claudeclaw.skills.loader import SkillManifest
+from claudeclaw.skills.registry import SkillRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -52,3 +53,47 @@ Reply with ONLY the skill name, or "none" if no skill matches."""
         except Exception as e:
             logger.error("Router Claude call failed: %s", e)
             return None
+
+
+NATIVE_SKILL_INTENTS: dict[str, list[str]] = {
+    "pop": [
+        "teach", "ensina", "ensinar",
+        "automate", "automatiza", "automatizar",
+        "map", "mapeia", "mapear",
+        "pop", "procedimento",
+        "how to", "como fazer",
+    ],
+    "agent-creator": [
+        "create an agent", "i need someone to",
+        "crie um agente", "preciso de alguém",
+    ],
+}
+
+
+def route(event: Event, registry: SkillRegistry) -> Optional[SkillManifest]:
+    """
+    Route an event to a skill.
+    1. Check native skill intent keywords (priority).
+    2. Fall through to general routing.
+    """
+    text_lower = event.text.lower()
+
+    for skill_name, keywords in NATIVE_SKILL_INTENTS.items():
+        if any(kw in text_lower for kw in keywords):
+            skill = registry.find(skill_name)
+            if skill is not None:
+                return skill
+
+    return _general_route(event, registry)
+
+
+def _general_route(event: Event, registry: SkillRegistry) -> Optional[SkillManifest]:
+    """
+    General skill routing: find the best matching skill for the event.
+    Plan 1 implementation: returns the first available on-demand skill.
+    Plan 3 will replace this with Claude SDK semantic matching.
+    """
+    for skill in registry.all_skills():
+        if skill.trigger == "on-demand":
+            return skill
+    return None
