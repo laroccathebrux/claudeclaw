@@ -40,7 +40,7 @@ def test_dispatch_passes_mcp_servers_to_sdk(tmp_path, monkeypatch, skill_with_ag
         dispatcher.dispatch(skill=skill_with_agent_mcp, user_message="run task", credentials={})
 
     call_kwargs = mock_create.call_args.kwargs
-    mcp_servers = call_kwargs.get("mcp_servers") or call_kwargs.get("tools", [])
+    mcp_servers = call_kwargs.get("mcp_servers", [])
     # Both filesystem (global) and postgres (declared) should be present
     assert len(mcp_servers) == 2
 
