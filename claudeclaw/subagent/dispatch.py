@@ -5,12 +5,16 @@ import anthropic
 
 from claudeclaw.skills.loader import SkillManifest
 from claudeclaw.core.event import Event
-from claudeclaw.auth.keyring import CredentialStore
 from claudeclaw.core.conversation import ConversationState
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-6"
+
+
+def credential_key_to_env_var(key: str) -> str:
+    """Normalize a credential key name to an environment variable name."""
+    return key.upper().replace("-", "_")
 
 
 @dataclass
@@ -64,6 +68,16 @@ class SubagentDispatcher:
             messages.extend(conversation.history)
         messages.append({"role": "user", "content": text})
 
+        # Build env dict from credentials — validate all declared keys are present
+        env: dict[str, str] = {}
+        for key in (skill.credentials or []):
+            value = (credentials or {}).get(key)
+            if value is None:
+                raise ValueError(
+                    f"Credential '{key}' declared in skill '{skill.name}' but not provided."
+                )
+            env[credential_key_to_env_var(key)] = value
+
         kwargs = dict(
             model=MODEL,
             max_tokens=4096,
@@ -74,6 +88,8 @@ class SubagentDispatcher:
             kwargs["tools"] = tools
         if mcp_servers:
             kwargs["mcp_servers"] = mcp_servers
+        if env:
+            kwargs["env"] = env
 
         try:
             response = self._client.messages.create(**kwargs)
@@ -88,22 +104,7 @@ class SubagentDispatcher:
             raise
 
     def _build_system_prompt(self, skill: SkillManifest) -> str:
-        # PLAN 1 SIMPLIFICATION: credentials are injected as plaintext into the system prompt.
-        # The spec calls for env-var injection — that is deferred to Plan 5 (Plugins + MCPs)
-        # when the full subagent sandboxing model is wired up. Do NOT change this now.
-        parts = [skill.body]
-
-        if skill.credentials:
-            store = CredentialStore()
-            cred_lines = []
-            for key in skill.credentials:
-                value = store.get(key)
-                if value:
-                    cred_lines.append(f"{key}: {value}")
-            if cred_lines:
-                parts.append("\n## Credentials\n" + "\n".join(cred_lines))
-
-        return "\n\n".join(parts)
+        return skill.body
 
     def _resolve_tools(self, skill: SkillManifest) -> list:
         # Plan 1: tools list is empty or contains string names.
