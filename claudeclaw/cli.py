@@ -5,7 +5,8 @@ import click
 from claudeclaw.auth.oauth import AuthManager
 from claudeclaw.auth.keyring import CredentialStore
 from claudeclaw.skills.registry import SkillRegistry
-from claudeclaw.subagent.dispatch import SubagentDispatcher
+from claudeclaw.subagent.dispatch import SubagentDispatcher, dispatch_skill
+from claudeclaw.config.settings import get_settings as _get_settings
 from claudeclaw.core.orchestrator import Orchestrator
 from claudeclaw.channels.cli_adapter import CliAdapter
 from claudeclaw.core.event import Event
@@ -157,3 +158,71 @@ def channel_add(channel_type: str, token: str):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+
+@main.group()
+def schedule():
+    """Manage scheduled skills (cron and webhook triggers)."""
+
+
+@schedule.command("list")
+def schedule_list():
+    """List all registered cron schedules and webhook triggers."""
+    settings = _get_settings()
+
+    schedules_file = settings.config_dir / "schedules.yaml"
+    triggers_file = settings.config_dir / "triggers.yaml"
+
+    schedules = {}
+    if schedules_file.exists():
+        schedules = _yaml.safe_load(schedules_file.read_text()) or {}
+
+    triggers = {}
+    if triggers_file.exists():
+        triggers = _yaml.safe_load(triggers_file.read_text()) or {}
+
+    if not schedules and not triggers:
+        click.echo("No schedules or webhook triggers registered.")
+        return
+
+    if schedules:
+        click.echo("\nCRON SCHEDULES")
+        for skill_name, meta in schedules.items():
+            click.echo(f"  {skill_name:<25} {meta['schedule']:<20} {meta['cron_id']}")
+
+    if triggers:
+        click.echo("\nWEBHOOK TRIGGERS")
+        for trigger_id, meta in triggers.items():
+            click.echo(
+                f"  {trigger_id:<25} skill: {meta['skill_name']:<20} {meta['webhook_url']}"
+            )
+
+
+@schedule.command("run")
+@click.argument("skill_name")
+def schedule_run(skill_name: str):
+    """Manually fire a scheduled skill immediately."""
+    settings = _get_settings()
+    registry = SkillRegistry(skills_dir=settings.skills_dir)
+    skill = registry.find(skill_name)
+
+    if skill is None:
+        click.echo(f"Error: skill '{skill_name}' not found.", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Firing {skill_name} manually...")
+
+    event = Event(
+        text="",
+        channel="manual",
+        source="manual",
+        skill_name=skill_name,
+        payload={},
+        channel_reply_fn=None,
+    )
+
+    async def _run():
+        return await dispatch_skill(skill=skill, event=event)
+
+    result = asyncio.run(_run())
+    click.echo(f"Done. Result: {result}")

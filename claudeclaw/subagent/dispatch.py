@@ -78,3 +78,9 @@ class SubagentDispatcher:
         # MCPs and plugins are resolved in later plans.
         # Return empty list — no tool schemas wired yet.
         return []
+
+
+async def dispatch_skill(skill: SkillManifest, event: Event):
+    """Async wrapper around SubagentDispatcher for use in async CLI contexts."""
+    dispatcher = SubagentDispatcher()
+    return dispatcher.dispatch(skill, event)
