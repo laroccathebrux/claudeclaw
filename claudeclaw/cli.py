@@ -11,6 +11,11 @@ from claudeclaw.core.orchestrator import Orchestrator
 from claudeclaw.channels.cli_adapter import CliAdapter
 from claudeclaw.core.event import Event
 from claudeclaw.mcps.config import MCPConfig, load_mcps, add_mcp, remove_mcp
+from claudeclaw.plugins.manager import (
+    install as plugin_install_manager,
+    list_plugins,
+    uninstall as plugin_uninstall_manager,
+)
 
 
 @click.group()
@@ -268,6 +273,45 @@ def mcp_list():
     click.echo("-" * 50)
     for m in mcps:
         click.echo(f"{m.name:<20} {m.scope:<10} {m.command} {' '.join(m.args)}")
+
+
+@main.group()
+def plugin():
+    """Manage ClaudeClaw plugins."""
+    pass
+
+
+@plugin.command("install")
+@click.argument("name")
+def plugin_install(name):
+    """Install a plugin from PyPI (claudeclaw-plugin-<name>)."""
+    try:
+        plugin_install_manager(name)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+
+@plugin.command("list")
+def plugin_list():
+    """List installed plugins."""
+    records = list_plugins()
+    if not records:
+        click.echo("No plugins installed. Use 'claudeclaw plugin install <name>'.")
+        return
+    click.echo(f"{'NAME':<20} {'VERSION':<10} {'MCPS':<6} {'SKILLS':<8} {'INSTALLED'}")
+    click.echo("-" * 65)
+    for r in records:
+        click.echo(f"{r.name:<20} {r.version:<10} {len(r.mcps):<6} {len(r.skills):<8} {r.installed_at[:10]}")
+
+
+@plugin.command("uninstall")
+@click.argument("name")
+def plugin_uninstall(name):
+    """Uninstall a plugin and remove its MCPs and skills."""
+    try:
+        plugin_uninstall_manager(name)
+    except KeyError as e:
+        raise click.ClickException(str(e))
 
 
 @mcp.command("remove")
