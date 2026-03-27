@@ -19,3 +19,7 @@ class ChannelAdapter(ABC):
     async def send(self, response: Response) -> None:
         """Deliver a response back to the user."""
         ...
+
+    async def start(self) -> None:
+        """Long-running coroutine for webhook-based adapters. Override instead of receive()."""
+        raise NotImplementedError("Override either receive() or start()")
