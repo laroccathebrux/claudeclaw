@@ -22,6 +22,7 @@ class Event:
     source: str = "cli"                # "cli" | "telegram" | "cron" | "webhook" | "manual"
     skill_name: Optional[str] = None   # pre-resolved for cron/webhook/manual events
     payload: dict = field(default_factory=dict)
+    raw: dict = field(default_factory=dict)  # original webhook payload from adapter
     channel_reply_fn: Optional[Any] = None  # None for headless scheduled events
 
 
@@ -30,6 +31,7 @@ class Response:
     """Outbound response to send back via the originating channel."""
     text: str
     channel: str = ""
+    user_id: Optional[str] = None
     chat_id: Optional[Any] = None
     metadata: dict[str, Any] = field(default_factory=dict)
     event: Optional["Event"] = None  # TODO(Plan 3): remove — kept for Plan 1 backward compatibility
