@@ -40,8 +40,7 @@ def test_channel_add_telegram_stores_token(runner, tmp_path, monkeypatch, mocker
     channels_yaml = tmp_path / "config" / "channels.yaml"
     assert channels_yaml.exists()
     data = yaml.safe_load(channels_yaml.read_text())
-    types = [c["type"] for c in data["channels"]]
-    assert "telegram" in types
+    assert "telegram" in data["channels"]
 
 
 def test_channel_add_telegram_idempotent(runner, tmp_path, monkeypatch, mocker):
@@ -57,8 +56,8 @@ def test_channel_add_telegram_idempotent(runner, tmp_path, monkeypatch, mocker):
 
     channels_yaml = tmp_path / "config" / "channels.yaml"
     data = yaml.safe_load(channels_yaml.read_text())
-    telegram_entries = [c for c in data["channels"] if c["type"] == "telegram"]
-    assert len(telegram_entries) == 1
+    assert "telegram" in data["channels"]
+    assert data["channels"]["telegram"]["enabled"] is True
 
 
 def test_channel_add_requires_token(runner, tmp_path, monkeypatch):

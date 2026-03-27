@@ -133,38 +133,55 @@ def channel():
 
 
 @channel.command("add")
-@click.argument("channel_type")
-@click.option("--token", required=True, help="Bot or API token for the channel.")
-def channel_add(channel_type: str, token: str):
-    """Add and configure a channel adapter."""
-    from claudeclaw.config.settings import get_settings
+@click.argument("channel_type", type=click.Choice(["telegram", "whatsapp", "slack", "web"]))
+@click.option("--token", default=None, help="Bot token (Telegram/Slack)")
+@click.option("--account-sid", default=None, help="Twilio Account SID (WhatsApp)")
+@click.option("--auth-token", default=None, help="Twilio Auth Token (WhatsApp)")
+@click.option("--from", "from_number", default=None, help="Twilio WhatsApp sender number")
+@click.option("--signing-secret", default=None, help="Slack signing secret")
+@click.option("--port", default=3000, type=int, help="Web UI port (default: 3000)")
+def channel_add(channel_type, token, account_sid, auth_token, from_number, signing_secret, port):
+    """Configure and enable a channel adapter."""
+    from claudeclaw.config.settings import Settings
 
-    try:
-        settings = get_settings()
-        store = CredentialStore()
+    settings = Settings()
+    store = CredentialStore()
 
-        # Store token in credential store
-        token_key = f"{channel_type}-bot-token"
-        store.set(token_key, token)
+    channels_file = settings.config_dir / "channels.yaml"
+    config = {}
+    if channels_file.exists():
+        config = _yaml.safe_load(channels_file.read_text()) or {}
+    config.setdefault("channels", {})
 
-        # Upsert entry in channels.yaml
-        channels_file = settings.config_dir / "channels.yaml"
-        if channels_file.exists():
-            data = _yaml.safe_load(channels_file.read_text()) or {}
-        else:
-            data = {}
+    if channel_type == "whatsapp":
+        if not all([account_sid, auth_token, from_number]):
+            raise click.UsageError("--account-sid, --auth-token, and --from are required for WhatsApp")
+        store.set("twilio-account-sid", account_sid)
+        store.set("twilio-auth-token", auth_token)
+        store.set("twilio-whatsapp-from", from_number)
+        config["channels"]["whatsapp"] = {"enabled": True}
+        click.echo("WhatsApp channel configured. Point Twilio webhook to POST /whatsapp/inbound")
 
-        channels = data.get("channels", [])
-        # Remove existing entry for this channel type (idempotent)
-        channels = [c for c in channels if c.get("type") != channel_type]
-        channels.append({"type": channel_type, "enabled": True})
-        data["channels"] = channels
-        channels_file.write_text(_yaml.dump(data, default_flow_style=False))
+    elif channel_type == "slack":
+        if not all([token, signing_secret]):
+            raise click.UsageError("--token and --signing-secret are required for Slack")
+        store.set("slack-bot-token", token)
+        store.set("slack-signing-secret", signing_secret)
+        config["channels"]["slack"] = {"enabled": True, "socket_mode": True}
+        click.echo("Slack channel configured.")
 
-        click.echo(f"Channel '{channel_type}' configured. Token stored securely.")
-    except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    elif channel_type == "web":
+        config["channels"]["web"] = {"enabled": True, "port": port}
+        click.echo(f"Web UI channel configured. Will serve at http://localhost:{port}")
+
+    elif channel_type == "telegram":
+        if not token:
+            raise click.UsageError("--token is required for Telegram")
+        store.set("telegram-bot-token", token)
+        config["channels"]["telegram"] = {"enabled": True}
+        click.echo("Telegram channel configured.")
+
+    channels_file.write_text(_yaml.dump(config))
 
 
 @main.group()
