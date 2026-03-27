@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -37,7 +37,7 @@ class SlackAdapter(ChannelAdapter):
     # ChannelAdapter ABC
     # ------------------------------------------------------------------
 
-    async def receive(self):
+    async def receive(self) -> AsyncGenerator[Event, None]:
         """Slack is webhook-driven; events arrive via handle_events, not receive()."""
         # Yield from the queue — allows use with receive()-based manager
         while True:
@@ -80,6 +80,8 @@ class SlackAdapter(ChannelAdapter):
 
     async def handle_events(self, request):
         """FastAPI endpoint for POST /slack/events (production webhook mode)."""
+        if self._app is None:
+            raise RuntimeError("Slack adapter not initialized. Call start() first.")
         from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
         handler = AsyncSlackRequestHandler(self._app)
         return await handler.handle(request)
