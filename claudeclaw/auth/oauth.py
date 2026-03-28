@@ -67,29 +67,21 @@ class AuthManager:
             raise AuthError("not logged in. Run: claudeclaw login")
         return token
 
-    def login(self) -> None:
-        """Read the OAuth token already stored by Claude Code in the macOS keychain."""
-        import json
-        import subprocess
+    def login(self, api_key: Optional[str] = None) -> None:
+        """Store an Anthropic API key for use with the Anthropic SDK.
 
-        result = subprocess.run(
-            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise AuthError(
-                "Claude Code credentials not found in keychain. "
-                "Make sure you are logged in via Claude Code CLI (`claude login`)."
-            )
+        The API key can be obtained from https://console.anthropic.com/settings/keys.
+        If not provided, prompts interactively.
+        """
+        if api_key is None:
+            import getpass
+            api_key = getpass.getpass("Anthropic API key (sk-ant-...): ").strip()
 
-        try:
-            data = json.loads(result.stdout.strip())
-            token = data["claudeAiOauth"]["accessToken"]
-        except (json.JSONDecodeError, KeyError) as exc:
-            raise AuthError(f"Could not parse Claude Code credentials: {exc}") from exc
+        if not api_key.startswith("sk-ant-"):
+            raise AuthError("Invalid API key format. Expected key starting with 'sk-ant-'.")
 
-        self._store.set(TOKEN_KEY, token)
-        print("Logged in using existing Claude Code session.")
+        self._store.set(TOKEN_KEY, api_key)
+        print("API key saved. ClaudeClaw is ready.")
 
     def _exchange_code(self, code: str) -> str:
         """

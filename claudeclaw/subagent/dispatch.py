@@ -39,7 +39,7 @@ class SubagentDispatcher:
             from claudeclaw.auth.oauth import AuthManager, AuthError
             try:
                 token = AuthManager().get_token()
-                self._client = anthropic.Anthropic(auth_token=token)
+                self._client = anthropic.Anthropic(api_key=token)
             except AuthError:
                 # Fall back to SDK default (ANTHROPIC_API_KEY env var)
                 self._client = anthropic.Anthropic()

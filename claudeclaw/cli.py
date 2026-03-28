@@ -26,11 +26,12 @@ def main():
 
 
 @main.command()
-def login():
-    """Authenticate with your Claude account."""
+@click.option("--api-key", default=None, help="Anthropic API key (sk-ant-...). Prompts if omitted.")
+def login(api_key):
+    """Authenticate with your Anthropic API key."""
     try:
         auth = AuthManager()
-        auth.login()
+        auth.login(api_key=api_key)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
