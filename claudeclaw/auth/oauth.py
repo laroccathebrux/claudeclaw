@@ -68,37 +68,28 @@ class AuthManager:
         return token
 
     def login(self) -> None:
-        """Open browser for OAuth and wait for redirect with authorization code, then exchange for token."""
-        token_container = [None]
+        """Read the OAuth token already stored by Claude Code in the macOS keychain."""
+        import json
+        import subprocess
 
-        def handler_factory(*args, **kwargs):
-            return _CallbackHandler(*args, token_container=token_container, **kwargs)
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise AuthError(
+                "Claude Code credentials not found in keychain. "
+                "Make sure you are logged in via Claude Code CLI (`claude login`)."
+            )
 
-        server = HTTPServer(("localhost", REDIRECT_PORT), handler_factory)
-        server.socket.settimeout(120)
-        thread = threading.Thread(target=server.handle_request)
-        thread.start()
+        try:
+            data = json.loads(result.stdout.strip())
+            token = data["claudeAiOauth"]["accessToken"]
+        except (json.JSONDecodeError, KeyError) as exc:
+            raise AuthError(f"Could not parse Claude Code credentials: {exc}") from exc
 
-        params = urlencode({
-            "client_id": CLIENT_ID,
-            "redirect_uri": REDIRECT_URI,
-            "scope": SCOPE,
-            "response_type": "code",
-        })
-        auth_url = f"{OAUTH_URL}?{params}"
-        logger.info("Opening browser for Claude authentication...")
-        webbrowser.open(auth_url)
-        thread.join(timeout=120)
-        server.server_close()
-
-        code = token_container[0]
-        if not code:
-            raise AuthError("Authentication timed out or was cancelled.")
-
-        # Exchange authorization code for access token
-        token = self._exchange_code(code)
         self._store.set(TOKEN_KEY, token)
-        logger.info("Logged in successfully.")
+        print("Logged in using existing Claude Code session.")
 
     def _exchange_code(self, code: str) -> str:
         """
