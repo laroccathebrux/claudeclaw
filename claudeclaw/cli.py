@@ -62,12 +62,15 @@ def start(daemon):
         orchestrator = Orchestrator(skill_registry=registry, credential_store=credential_store)
         queue = asyncio.Queue()
 
+        orch_task = asyncio.create_task(orchestrator.run(queue))
+
         async def _feed_queue():
             async for event in channel.receive():
                 event.channel_adapter = channel
                 await queue.put(event)
+            orch_task.cancel()
 
-        await asyncio.gather(_feed_queue(), orchestrator.run(queue))
+        await asyncio.gather(_feed_queue(), orch_task, return_exceptions=True)
 
     try:
         asyncio.run(_run())
