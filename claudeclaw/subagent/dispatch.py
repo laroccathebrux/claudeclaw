@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_CLI = "claude"
 
+# Maps skill shell_policy to the --allowedTools list passed to claude -p.
+# "none" → no tools flag (Claude Code defaults apply; no shell/file write access).
+# "read-only" → read-only filesystem access.
+# "restricted" → read + restricted shell.
+# "full" → full shell + file write access (needed for skills that create files).
+_SHELL_POLICY_TOOLS: dict[str, str] = {
+    "read-only": "Read,Glob,Grep",
+    "restricted": "Read,Glob,Grep,Bash",
+    "full": "Bash,Read,Write,Edit,Glob,Grep",
+}
+
 
 def credential_key_to_env_var(key: str) -> str:
     """Normalize a credential key name to an environment variable name."""
@@ -57,6 +68,12 @@ class SubagentDispatcher:
             cmd += ["--resume", session_id]
         else:
             cmd += ["--append-system-prompt", system_prompt]
+
+        # Restrict or grant tools based on skill's declared shell_policy
+        shell_policy = getattr(skill, "shell_policy", "none") or "none"
+        allowed_tools = _SHELL_POLICY_TOOLS.get(shell_policy)
+        if allowed_tools:
+            cmd += ["--allowedTools", allowed_tools]
 
         # Inject MCPs via --mcp-config
         from claudeclaw.mcps.config import resolve_mcps

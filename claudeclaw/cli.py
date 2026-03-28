@@ -144,6 +144,22 @@ def agents():
     pass
 
 
+@agents.command("list")
+def agents_list():
+    """List all created agents."""
+    from claudeclaw.agents.registry import AgentRegistry
+    registry = AgentRegistry()
+    all_agents = registry.list_agents()
+    if not all_agents:
+        click.echo("No agents created yet. Create one by messaging: 'create an agent'")
+        return
+    click.echo(f"{'NAME':<25} {'SKILL':<25} {'SCHEDULE':<20} {'CREATED'}")
+    click.echo("-" * 80)
+    for a in all_agents:
+        schedule = a.schedule or "on-demand"
+        click.echo(f"{a.name:<25} {a.skill_name:<25} {schedule:<20} {a.created_at}")
+
+
 @agents.command("run")
 @click.argument("skill_name")
 @click.argument("message", default="run")

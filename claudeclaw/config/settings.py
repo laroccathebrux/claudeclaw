@@ -17,11 +17,12 @@ class Settings:
         self.config_dir = self.home / "config"
         self.skills_dir = self.home / "skills"
         self.plugins_dir = self.home / "plugins"
+        self.agents_dir = self.home / "agents"
         self.config_file = self.config_dir / "settings.yaml"
         self._ensure_dirs()
 
     def _ensure_dirs(self):
-        for d in [self.config_dir, self.skills_dir, self.plugins_dir]:
+        for d in [self.config_dir, self.skills_dir, self.plugins_dir, self.agents_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
     def get(self, key: str, default=None):
