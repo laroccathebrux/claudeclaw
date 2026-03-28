@@ -33,7 +33,16 @@ class SubagentDispatcher:
     """
 
     def __init__(self, client: Optional[anthropic.Anthropic] = None):
-        self._client = client or anthropic.Anthropic()
+        if client is not None:
+            self._client = client
+        else:
+            from claudeclaw.auth.oauth import AuthManager, AuthError
+            try:
+                token = AuthManager().get_token()
+                self._client = anthropic.Anthropic(auth_token=token)
+            except AuthError:
+                # Fall back to SDK default (ANTHROPIC_API_KEY env var)
+                self._client = anthropic.Anthropic()
 
     def dispatch(
         self,
