@@ -55,22 +55,58 @@ def start(daemon):
     click.echo("Starting ClaudeClaw...")
 
     async def _run():
-        channel = CliAdapter()
-        registry = SkillRegistry()
         from claudeclaw.auth.keyring import CredentialStore
+        from claudeclaw.config.settings import get_settings
+        import yaml
+
+        registry = SkillRegistry()
         credential_store = CredentialStore()
         orchestrator = Orchestrator(skill_registry=registry, credential_store=credential_store)
         queue = asyncio.Queue()
 
+        # Load channels from config
+        settings = get_settings()
+        channels_file = settings.config_dir / "channels.yaml"
+        channels_config = {}
+        if channels_file.exists():
+            channels_config = yaml.safe_load(channels_file.read_text()) or {}
+
+        enabled_channels = channels_config.get("channels", {})
+
+        async def _feed_adapter(adapter, adapter_name):
+            async for event in adapter.receive():
+                if not hasattr(event, "channel_adapter") or event.channel_adapter is None:
+                    event.channel_adapter = adapter
+                await queue.put(event)
+
+        # Always start CLI adapter
+        cli = CliAdapter()
+        tasks = []
+
         orch_task = asyncio.create_task(orchestrator.run(queue))
 
-        async def _feed_queue():
-            async for event in channel.receive():
-                event.channel_adapter = channel
+        async def _feed_cli():
+            async for event in cli.receive():
+                event.channel_adapter = cli
                 await queue.put(event)
             orch_task.cancel()
 
-        await asyncio.gather(_feed_queue(), orch_task, return_exceptions=True)
+        tasks.append(asyncio.create_task(_feed_cli()))
+
+        # Start Telegram if enabled
+        if enabled_channels.get("telegram", {}).get("enabled"):
+            token = credential_store.get("telegram-bot-token")
+            if token:
+                from claudeclaw.channels.telegram_adapter import TelegramAdapter
+                tg = TelegramAdapter(token=token)
+                await tg.start_application()
+                click.echo("Telegram channel started.")
+                tasks.append(asyncio.create_task(_feed_adapter(tg, "telegram")))
+            else:
+                click.echo("Telegram enabled but token not found — skipping.", err=True)
+
+        tasks.append(orch_task)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     try:
         asyncio.run(_run())

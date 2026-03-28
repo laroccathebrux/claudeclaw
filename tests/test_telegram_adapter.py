@@ -40,10 +40,10 @@ async def test_send_calls_bot_send_message(adapter):
     mock_bot = AsyncMock()
     adapter._bot = mock_bot
 
-    response = Response(text="reply text", channel="telegram", chat_id=99)
+    response = Response(text="reply text", channel="telegram", user_id="99")
     await adapter.send(response)
 
-    mock_bot.send_message.assert_awaited_once_with(chat_id=99, text="reply text")
+    mock_bot.send_message.assert_awaited_once_with(chat_id="99", text="reply text")
 
 
 async def test_on_message_puts_to_internal_queue(adapter):

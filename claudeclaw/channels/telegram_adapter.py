@@ -54,10 +54,11 @@ class TelegramAdapter(ChannelAdapter):
             yield Event(
                 text=message.text,
                 channel="telegram",
+                user_id=str(message.chat_id),
                 channel_adapter=self,
                 metadata={
                     "chat_id": message.chat_id,
-                    "user_id": message.from_user.id if message.from_user else None,
+                    "from_user_id": message.from_user.id if message.from_user else None,
                 },
             )
 
@@ -95,4 +96,4 @@ class TelegramAdapter(ChannelAdapter):
                 "TelegramAdapter.send() called before bot is initialized. "
                 "Call start_application() first, or set _bot directly (for tests)."
             )
-        await self._bot.send_message(chat_id=response.chat_id, text=response.text)
+        await self._bot.send_message(chat_id=response.user_id, text=response.text)

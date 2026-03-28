@@ -91,10 +91,11 @@ class Orchestrator:
                 conversation.step += 1
                 self._conv_store.save(conversation)
 
-            return Response(text=result.text, channel=event.channel)
+            return Response(text=result.text, channel=event.channel, user_id=event.user_id)
         except Exception as e:
             logger.error("Dispatch failed: %s", e)
             return Response(
                 text=f"Something went wrong running '{skill.name}'. Check logs.",
                 channel=event.channel,
+                user_id=event.user_id,
             )
