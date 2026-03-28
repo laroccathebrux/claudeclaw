@@ -1,4 +1,5 @@
 # tests/test_mcp_dispatch.py
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from claudeclaw.mcps.config import MCPConfig, save_mcps
@@ -25,6 +26,14 @@ def skill_with_agent_mcp():
     )
 
 
+def _mock_run():
+    mock = MagicMock()
+    mock.returncode = 0
+    mock.stdout = json.dumps({"result": "done", "stop_reason": "end_turn"})
+    mock.stderr = ""
+    return mock
+
+
 def test_dispatch_passes_mcp_servers_to_sdk(tmp_path, monkeypatch, skill_with_agent_mcp):
     monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
     (tmp_path / "config").mkdir(parents=True, exist_ok=True)
@@ -34,15 +43,15 @@ def test_dispatch_passes_mcp_servers_to_sdk(tmp_path, monkeypatch, skill_with_ag
     ])
 
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock(content=[MagicMock(text="done")], stop_reason="end_turn")
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run()) as mock_run:
         dispatcher.dispatch(skill=skill_with_agent_mcp, user_message="run task", credentials={})
 
-    call_kwargs = mock_create.call_args.kwargs
-    mcp_servers = call_kwargs.get("mcp_servers", [])
+    cmd = mock_run.call_args.args[0]
+    assert "--mcp-config" in cmd
+    mcp_json = cmd[cmd.index("--mcp-config") + 1]
+    servers = json.loads(mcp_json)
     # Both filesystem (global) and postgres (declared) should be present
-    assert len(mcp_servers) == 2
+    assert len(servers) == 2
 
 
 def test_dispatch_excludes_undeclared_agent_mcp(tmp_path, monkeypatch):
@@ -57,11 +66,8 @@ def test_dispatch_excludes_undeclared_agent_mcp(tmp_path, monkeypatch):
     )
 
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock(content=[MagicMock(text="ok")], stop_reason="end_turn")
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run()) as mock_run:
         dispatcher.dispatch(skill=skill, user_message="go", credentials={})
 
-    call_kwargs = mock_create.call_args.kwargs
-    mcp_servers = call_kwargs.get("mcp_servers", [])
-    assert mcp_servers == []
+    cmd = mock_run.call_args.args[0]
+    assert "--mcp-config" not in cmd

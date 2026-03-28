@@ -134,17 +134,19 @@ def test_dispatcher_prepends_conversation_history():
         step=2, data={}, history=history,
     )
 
+    import json
+    from unittest.mock import patch as _patch
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = json.dumps({"result": "Which systems?", "stop_reason": "end_turn"})
+    mock_proc.stderr = ""
+
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="Which systems?")]
-    mock_response.stop_reason = "end_turn"
+    with _patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=mock_proc) as mock_run:
+        result = dispatcher.dispatch(skill, event, conversation=state)
 
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
-        dispatcher.dispatch(skill, event, conversation=state)
-
-    messages_arg = mock_create.call_args.kwargs["messages"]
-    # History should appear before the current user message
-    assert messages_arg[0]["role"] == "assistant"
-    assert messages_arg[1]["role"] == "user"
-    assert messages_arg[1]["content"] == "issue invoices"
-    assert messages_arg[-1]["content"] == "ERP and Gmail"
+    assert result.text == "Which systems?"
+    # Conversation history is passed via the prompt text (CLI backend)
+    cmd = mock_run.call_args.args[0]
+    assert "ERP and Gmail" in cmd

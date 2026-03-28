@@ -48,9 +48,9 @@ def test_dispatcher_builds_no_bash_tool_for_none_policy():
 
 
 def test_dispatcher_injects_openshell_tool_for_read_only_policy():
+    """With the CLI backend, _build_tools always returns [] — Claude CLI handles tool use."""
     from claudeclaw.subagent.dispatch import SubagentDispatcher
     from claudeclaw.skills.loader import SkillManifest
-    from claudeclaw.security.openshell import OpenShellTool
 
     dispatcher = SubagentDispatcher.__new__(SubagentDispatcher)
     skill = MagicMock(spec=SkillManifest)
@@ -60,14 +60,12 @@ def test_dispatcher_injects_openshell_tool_for_read_only_policy():
     skill.mcps_agent = []
 
     tools = dispatcher._build_tools(skill)
-    shell_tools = [t for t in tools if isinstance(t, OpenShellTool)]
-    assert len(shell_tools) == 1
-    assert shell_tools[0]._shell._policy == "read-only"
+    assert tools == []
 
 
 def test_dispatcher_injects_openshell_tool_for_restricted_policy():
+    """With the CLI backend, _build_tools always returns [] — Claude CLI handles tool use."""
     from claudeclaw.subagent.dispatch import SubagentDispatcher
-    from claudeclaw.security.openshell import OpenShellTool
 
     dispatcher = SubagentDispatcher.__new__(SubagentDispatcher)
     skill = MagicMock()
@@ -77,6 +75,4 @@ def test_dispatcher_injects_openshell_tool_for_restricted_policy():
     skill.mcps_agent = []
 
     tools = dispatcher._build_tools(skill)
-    shell_tools = [t for t in tools if isinstance(t, OpenShellTool)]
-    assert len(shell_tools) == 1
-    assert shell_tools[0]._shell._policy == "restricted"
+    assert tools == []

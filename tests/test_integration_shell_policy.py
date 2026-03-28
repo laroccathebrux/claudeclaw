@@ -50,8 +50,8 @@ def test_dispatcher_tools_for_none_policy_skill_excludes_shell_tool():
 
 
 def test_dispatcher_tools_for_full_policy_skill_includes_shell_tool():
+    """With the CLI backend, tool injection is handled by Claude Code — _build_tools always returns []."""
     from claudeclaw.subagent.dispatch import SubagentDispatcher
-    from claudeclaw.security.openshell import OpenShellTool
 
     dispatcher = SubagentDispatcher.__new__(SubagentDispatcher)
     skill = MagicMock()
@@ -61,7 +61,8 @@ def test_dispatcher_tools_for_full_policy_skill_includes_shell_tool():
     skill.mcps_agent = []
 
     tools = dispatcher._build_tools(skill)
-    assert any(isinstance(t, OpenShellTool) for t in tools)
+    # Claude CLI handles tool use; dispatcher returns empty list
+    assert tools == []
 
 
 def test_all_policies_return_shell_result_instances():

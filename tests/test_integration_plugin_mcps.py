@@ -87,14 +87,20 @@ def test_full_install_to_dispatch_chain(integration_env, mock_plugin_package):
         credentials=[],
     )
 
-    dispatcher = SubagentDispatcher()
-    mock_create = MagicMock(return_value=MagicMock(content=[MagicMock(text="done")], stop_reason="end_turn"))
+    import json as _json
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = _json.dumps({"result": "done", "stop_reason": "end_turn"})
+    mock_proc.stderr = ""
 
-    with patch.object(dispatcher._client.messages, "create", mock_create):
+    dispatcher = SubagentDispatcher()
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=mock_proc) as mock_run:
         dispatcher.dispatch(skill=skill, user_message="follow up with leads", credentials={})
 
-    call_kwargs = mock_create.call_args.kwargs
-    mcp_servers = call_kwargs.get("mcp_servers", [])
+    cmd = mock_run.call_args.args[0]
+    assert "--mcp-config" in cmd
+    mcp_json = cmd[cmd.index("--mcp-config") + 1]
+    mcp_servers = _json.loads(mcp_json)
     assert len(mcp_servers) == 1, f"Expected 1 MCP server, got {len(mcp_servers)}"
     assert mcp_servers[0]["command"] == "node"
 

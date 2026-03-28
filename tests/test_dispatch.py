@@ -1,4 +1,5 @@
 # tests/test_dispatch.py
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from claudeclaw.subagent.dispatch import SubagentDispatcher, DispatchResult
@@ -25,13 +26,18 @@ def event():
     return Event(text="hello", channel="cli", user_id="local")
 
 
+def _mock_run(stdout_result: str = "Echo: hello", stop_reason: str = "end_turn"):
+    """Return a mock subprocess.CompletedProcess with JSON output."""
+    mock = MagicMock()
+    mock.returncode = 0
+    mock.stdout = json.dumps({"result": stdout_result, "stop_reason": stop_reason})
+    mock.stderr = ""
+    return mock
+
+
 def test_dispatch_returns_result_text(skill, event):
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="Echo: hello")]
-    mock_response.stop_reason = "end_turn"
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response):
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run("Echo: hello")):
         result = dispatcher.dispatch(skill, event)
 
     assert isinstance(result, DispatchResult)
@@ -41,47 +47,38 @@ def test_dispatch_returns_result_text(skill, event):
 
 def test_dispatch_uses_skill_body_as_system_prompt(skill, event):
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="ok")]
-    mock_response.stop_reason = "end_turn"
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run()) as mock_run:
         dispatcher.dispatch(skill, event)
 
-    call_kwargs = mock_create.call_args.kwargs
-    assert skill.body in call_kwargs["system"]
+    cmd = mock_run.call_args.args[0]
+    prompt_idx = cmd.index("--append-system-prompt")
+    assert skill.body in cmd[prompt_idx + 1]
 
 
 def test_dispatch_enforces_tool_permission(skill, event):
-    """A skill with no tools declared should receive an empty tools list."""
+    """A skill with shell_policy=none should not add --allowedTools to the command."""
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="ok")]
-    mock_response.stop_reason = "end_turn"
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run()) as mock_run:
         dispatcher.dispatch(skill, event)
 
-    call_kwargs = mock_create.call_args.kwargs
-    # No tools declared in skill → tools list not passed (or empty)
-    assert call_kwargs.get("tools", []) == []
+    cmd = mock_run.call_args.args[0]
+    assert "--allowedTools" not in cmd
 
 
 def test_dispatch_injects_credentials_as_env_vars(skill, event, tmp_path, monkeypatch):
-    """Credentials should be injected as env vars, not as plaintext in system prompt."""
+    """Credentials must appear in the subprocess env, not in the system prompt."""
     monkeypatch.setenv("CLAUDECLAW_HOME", str(tmp_path))
     skill.credentials = ["erp-user"]
 
     dispatcher = SubagentDispatcher()
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="ok")]
-    mock_response.stop_reason = "end_turn"
-
-    with patch.object(dispatcher._client.messages, "create", return_value=mock_response) as mock_create:
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=_mock_run()) as mock_run:
         dispatcher.dispatch(skill, event, credentials={"erp-user": "alice"})
 
-    call_kwargs = mock_create.call_args.kwargs
-    env = call_kwargs.get("env") or {}
+    call_kwargs = mock_run.call_args.kwargs
+    env = call_kwargs.get("env", {})
     assert env.get("ERP_USER") == "alice"
-    system_prompt = call_kwargs.get("system", "")
+
+    cmd = mock_run.call_args.args[0]
+    prompt_idx = cmd.index("--append-system-prompt")
+    system_prompt = cmd[prompt_idx + 1]
     assert "alice" not in system_prompt

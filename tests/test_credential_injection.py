@@ -27,21 +27,27 @@ def test_credentials_injected_as_env_vars_not_in_prompt(tmp_path, monkeypatch):
     )
     credentials = {"erp-user": "alice", "erp-password": "s3cr3t"}
 
-    dispatcher = SubagentDispatcher()
-    mock_create = MagicMock(return_value=MagicMock(content=[MagicMock(text="done")], stop_reason="end_turn"))
+    import json
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = json.dumps({"result": "done", "stop_reason": "end_turn"})
+    mock_proc.stderr = ""
 
-    with patch.object(dispatcher._client.messages, "create", mock_create):
+    dispatcher = SubagentDispatcher()
+    with patch("claudeclaw.subagent.dispatch.subprocess.run", return_value=mock_proc) as mock_run:
         dispatcher.dispatch(skill=skill, user_message="run", credentials=credentials)
 
-    call_kwargs = mock_create.call_args.kwargs
+    call_kwargs = mock_run.call_args.kwargs
 
-    # Env vars must be present in the call
-    env = call_kwargs.get("env") or {}
+    # Env vars must be present in the subprocess env
+    env = call_kwargs.get("env", {})
     assert env.get("ERP_USER") == "alice"
     assert env.get("ERP_PASSWORD") == "s3cr3t"
 
-    # Secret values must NOT appear in the system prompt
-    system_prompt = call_kwargs.get("system", "")
+    # Secret values must NOT appear in the --append-system-prompt arg
+    cmd = mock_run.call_args.args[0]
+    prompt_idx = cmd.index("--append-system-prompt")
+    system_prompt = cmd[prompt_idx + 1]
     assert "alice" not in system_prompt
     assert "s3cr3t" not in system_prompt
 
