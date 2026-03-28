@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from claudeclaw.skills.loader import SkillManifest
@@ -24,12 +24,14 @@ class DispatchResult:
     text: str
     skill_name: str
     stop_reason: str
+    session_id: Optional[str] = field(default=None)
 
 
 class SubagentDispatcher:
     """
     Dispatches a subagent via the Claude Code CLI (`claude -p`).
     Uses the user's existing Claude subscription — no API key needed.
+    Maintains conversation history via Claude CLI session resumption.
     Credentials are injected as environment variables.
     MCPs are passed via --mcp-config.
     """
@@ -46,12 +48,15 @@ class SubagentDispatcher:
         system_prompt = self._build_system_prompt(skill)
         text = event.text if event is not None else (user_message or "")
 
-        cmd = [
-            CLAUDE_CLI, "-p",
-            "--output-format", "json",
-            "--no-session-persistence",
-            "--append-system-prompt", system_prompt,
-        ]
+        # Resume existing session if we have one, otherwise start a new one
+        session_id = (conversation.data or {}).get("claude_session_id") if conversation else None
+
+        cmd = [CLAUDE_CLI, "-p", "--output-format", "json"]
+
+        if session_id:
+            cmd += ["--resume", session_id]
+        else:
+            cmd += ["--append-system-prompt", system_prompt]
 
         # Inject MCPs via --mcp-config
         from claudeclaw.mcps.config import resolve_mcps
@@ -91,10 +96,12 @@ class SubagentDispatcher:
             data = json.loads(result.stdout)
             response_text = data.get("result", "")
             stop_reason = data.get("stop_reason", "end_turn")
+            new_session_id = data.get("session_id")
             return DispatchResult(
                 text=response_text,
                 skill_name=skill.name,
                 stop_reason=stop_reason,
+                session_id=new_session_id,
             )
         except subprocess.TimeoutExpired:
             logger.error("Subagent dispatch timed out for skill '%s'", skill.name)

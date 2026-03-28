@@ -74,6 +74,23 @@ class Orchestrator:
         logger.info("Dispatching skill '%s' for event: %r", skill.name, event.text)
         try:
             result = self._dispatcher.dispatch(skill, event, conversation=conversation)
+
+            # Persist session_id so next message resumes the same Claude CLI session
+            if result.session_id:
+                from claudeclaw.core.conversation import ConversationState
+                if conversation is None:
+                    conversation = ConversationState(
+                        channel=event.channel,
+                        user_id=user_id,
+                        skill_name=skill.name,
+                        step=1,
+                        data={},
+                        history=[],
+                    )
+                conversation.data["claude_session_id"] = result.session_id
+                conversation.step += 1
+                self._conv_store.save(conversation)
+
             return Response(text=result.text, channel=event.channel)
         except Exception as e:
             logger.error("Dispatch failed: %s", e)
