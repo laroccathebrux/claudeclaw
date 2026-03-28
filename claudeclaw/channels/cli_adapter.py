@@ -14,6 +14,8 @@ class CliAdapter(ChannelAdapter):
                 text = await loop.run_in_executor(None, input, "\n> ")
             except (EOFError, KeyboardInterrupt):
                 return
+            if text.strip().lower() in ("/exit", "/quit"):
+                return
             if text.strip():
                 yield Event(text=text.strip(), channel="cli", user_id="local")
 
